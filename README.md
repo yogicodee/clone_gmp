@@ -20,15 +20,14 @@ npm run dev
 ### 🧩 Push Folder
 
 ```bash
-npm install
-npm run build
-npm run dev
+git add backend
+git commit -m "Add backend master data CRUD modules"
+git push origin main
 ```
 
 ### 🧩 Pull Folder
 
 ```bash
-npm install
-npm run build
-npm run dev
+git pull origin main
+git pull --rebase origin main
 ```
