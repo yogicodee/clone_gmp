@@ -16,3 +16,19 @@ npm install
 npm run build
 npm run dev
 ```
+
+### 🧩 Push Folder
+
+```bash
+npm install
+npm run build
+npm run dev
+```
+
+### 🧩 Pull Folder
+
+```bash
+npm install
+npm run build
+npm run dev
+```
