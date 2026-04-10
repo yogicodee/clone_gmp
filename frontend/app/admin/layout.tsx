@@ -9,19 +9,22 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="flex min-h-screen overflow-hidden bg-gray-100">
-      
+    <div className="min-h-screen bg-gray-100">
+
       {/* SIDEBAR */}
       <Sidebar open={open} />
 
-      {/* MAIN CONTENT */}
-      <div className="flex flex-col flex-1">
-        
+      {/* MAIN */}
+      <div
+        className={`flex flex-col transition-all duration-300
+    ${open ? "ml-64" : "ml-20"}`}
+      >
+
         {/* HEADER */}
         <Header onToggle={() => setOpen(!open)} />
 
-        {/* PAGE CONTENT */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        {/* CONTENT */}
+        <main className="h-[calc(100vh-64px)] overflow-y-auto p-6 bg-gray-50">
           {children}
         </main>
 
