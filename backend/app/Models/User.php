@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public $timestamps = false;
 
     /**
      * The attributes that are mass assignable.
@@ -19,9 +21,12 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'nama',
         'name',
         'email',
         'password',
+        'role',
+        'api_token',
     ];
 
     /**
@@ -31,6 +36,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'api_token',
         'remember_token',
     ];
 
@@ -45,5 +51,23 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function issueApiToken(): string
+    {
+        $plainToken = Str::random(60);
+
+        $this->forceFill([
+            'api_token' => hash('sha256', $plainToken),
+        ])->save();
+
+        return $plainToken;
+    }
+
+    public function revokeApiToken(): void
+    {
+        $this->forceFill([
+            'api_token' => null,
+        ])->save();
     }
 }
