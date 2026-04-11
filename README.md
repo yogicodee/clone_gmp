@@ -9,7 +9,7 @@ php artisan migrate
 php artisan serve
 ```
 
-### 🧩 Install Frontend
+## 🧩 Install Frontend
 
 ```bash
 npm install
@@ -17,17 +17,32 @@ npm run build
 npm run dev
 ```
 
-### 🧩 Push Folder
+### 🧩 Push Folder Frontend
 
 ```bash
-git add backend
-git commit -m "Add backend master data CRUD modules"
+git add frontend
+git commit -m ""
 git push origin main
 ```
 
-### 🧩 Pull Folder
+### 🧩 Push Folder Backend
 
 ```bash
-git pull origin main
-git pull --rebase origin main
+git add backend
+git commit -m ""
+git push origin main
 ```
+
+### 🧩 Pull Folder Frontend
+
+```bash
+git fetch origin
+git restore --source=origin/main frontend
+```
+### 🧩 Pull Folder Backend
+
+```bash
+git fetch origin
+git restore --source=origin/main backend
+```
+
