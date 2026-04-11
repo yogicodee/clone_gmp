@@ -6,7 +6,7 @@ cp .env.example .env
 php artisan key:generate
 php artisan storage:link
 php artisan migrate
-php artisan serve
+php artisan serve --host=127.0.0.1 --port=8000
 ```
 
 ## 🧩 Install Frontend
