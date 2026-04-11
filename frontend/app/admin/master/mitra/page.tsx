@@ -148,7 +148,7 @@ export default function Page() {
                     placeholder="Cari nama yayasan atau alamat..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="border p-2 rounded-md w-1/4"
+                    className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button

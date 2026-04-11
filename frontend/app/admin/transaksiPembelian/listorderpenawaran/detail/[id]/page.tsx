@@ -3,31 +3,49 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useParams, useRouter } from "next/navigation";
 
 /* ================= TYPE ================= */
-type Product = {
+type Item = {
     id: number;
-    nama: string;
-    alamat: string;
-    no_telp: string;
-    kategori: string;
+    nama_barang: string;
+    qty: number;
+    satuan: string;
+    harga_satuan: number;
+    keterangan: string;
 };
 
-type FormType = Omit<Product, "id">;
+type FormType = Omit<Item, "id">;
 
-export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        { id: 1, nama: "Asikin Aurelia", alamat: "Ploso", no_telp: "08123456789", kategori: "Retail" },
-        { id: 2, nama: "PT Santika", alamat: "Jakarta", no_telp: "08234567890", kategori: "Distributor" },
-        { id: 3, nama: "CV Aulia", alamat: "Bandung", no_telp: "08345678901", kategori: "Grosir" },
-        { id: 4, nama: "PT Maju Jaya", alamat: "Surabaya", no_telp: "08456789012", kategori: "Supplier" },
+export default function DetailPage() {
+    const params = useParams();
+    const router = useRouter();
+
+    const [data, setData] = useState<Item[]>([
+        {
+            id: 1,
+            nama_barang: "Semen",
+            qty: 100,
+            satuan: "Zak",
+            harga_satuan: 65000,
+            keterangan: "Proyek A",
+        },
+        {
+            id: 2,
+            nama_barang: "Pasir",
+            qty: 5,
+            satuan: "Truk",
+            harga_satuan: 800000,
+            keterangan: "Proyek B",
+        },
     ]);
 
     const [form, setForm] = useState<FormType>({
-        nama: "",
-        alamat: "",
-        no_telp: "",
-        kategori: "",
+        nama_barang: "",
+        qty: 0,
+        satuan: "",
+        harga_satuan: 0,
+        keterangan: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
@@ -38,7 +56,7 @@ export default function Page() {
     const [search, setSearch] = useState("");
 
     /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Product>("nama");
+    const [sortField, setSortField] = useState<keyof Item>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     /* ================= PAGINATION ================= */
@@ -48,7 +66,7 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = () => {
-        if (!form.nama || !form.alamat || !form.no_telp || !form.kategori) return;
+        if (!form.nama_barang || !form.satuan) return;
 
         if (editId) {
             setData((prev) =>
@@ -66,7 +84,7 @@ export default function Page() {
         resetForm();
     };
 
-    const handleEdit = (item: Product) => {
+    const handleEdit = (item: Item) => {
         const { id, ...rest } = item;
         setForm(rest);
         setEditId(id);
@@ -81,12 +99,18 @@ export default function Page() {
     };
 
     const resetForm = () => {
-        setForm({ nama: "", alamat: "", no_telp: "", kategori: "" });
+        setForm({
+            nama_barang: "",
+            qty: 0,
+            satuan: "",
+            harga_satuan: 0,
+            keterangan: "",
+        });
         setEditId(null);
         setOpenForm(false);
     };
 
-    const handleSort = (field: keyof Product) => {
+    const handleSort = (field: keyof Item) => {
         if (sortField === field) {
             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
         } else {
@@ -103,8 +127,8 @@ export default function Page() {
         if (search) {
             result = result.filter(
                 (item) =>
-                    item.nama.toLowerCase().includes(search.toLowerCase()) ||
-                    item.alamat.toLowerCase().includes(search.toLowerCase())
+                    item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
+                    item.keterangan.toLowerCase().includes(search.toLowerCase())
             );
         }
 
@@ -132,23 +156,27 @@ export default function Page() {
         setCurrentPage(1);
     }, [search]);
 
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [filteredData]);
-
     return (
         <div className="p-6 space-y-6">
+
             {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Supplier</h1>
+                <h1 className="text-xl font-bold">
+                    Detail Order #{params.id}
+                </h1>
+
+                <button
+                    onClick={() => router.back()}
+                    className="px-4 py-2 bg-gray-200 rounded-md"
+                >
+                    Kembali
+                </button>
             </div>
 
+            {/* SEARCH + ADD */}
             <div className="flex items-center justify-between">
-                {/* FILTER */}
                 <input
-                    placeholder="Cari nama atau alamat..."
+                    placeholder="Cari barang..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
@@ -159,7 +187,7 @@ export default function Page() {
                     className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg"
                 >
                     <Plus size={16} />
-                    Tambah Data
+                    Tambah Barang
                 </button>
             </div>
 
@@ -169,31 +197,15 @@ export default function Page() {
                     <thead className="bg-gray-100">
                         <tr>
                             <th className="p-3">No</th>
-
                             <th className="p-3">
-                                <button onClick={() => handleSort("nama")} className="flex items-center gap-2">
-                                    Nama <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("nama_barang")} className="flex gap-2">
+                                    Nama Barang <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("alamat")} className="flex items-center gap-2">
-                                    Alamat <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("no_telp")} className="flex items-center gap-2">
-                                    No Telp <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("kategori")} className="flex items-center gap-2">
-                                    Kategori <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
+                            <th className="p-3">Qty</th>
+                            <th className="p-3">Satuan</th>
+                            <th className="p-3">Harga</th>
+                            <th className="p-3">Keterangan</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -204,10 +216,13 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama}</td>
-                                <td className="p-3">{item.alamat}</td>
-                                <td className="p-3">{item.no_telp}</td>
-                                <td className="p-3">{item.kategori}</td>
+                                <td className="p-3">{item.nama_barang}</td>
+                                <td className="p-3">{item.qty}</td>
+                                <td className="p-3">{item.satuan}</td>
+                                <td className="p-3">
+                                    Rp {item.harga_satuan.toLocaleString("id-ID")}
+                                </td>
+                                <td className="p-3">{item.keterangan}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -230,70 +245,59 @@ export default function Page() {
                 </table>
             </div>
 
-            {/* PAGINATION */}
-            <div className="flex justify-end gap-2">
-                <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 border rounded-md"
-                >
-                    Prev
-                </button>
-
-                {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                        key={i}
-                        onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
-                    >
-                        {i + 1}
-                    </button>
-                ))}
-
-                <button
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 border rounded-md"
-                >
-                    Next
-                </button>
-            </div>
-
             {/* FORM MODAL */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
                             <h2 className="text-lg font-semibold">
-                                {editId ? "Edit Data" : "Tambah Data"}
+                                {editId ? "Edit Barang" : "Tambah Barang"}
                             </h2>
 
                             <input
-                                placeholder="Nama"
-                                value={form.nama}
-                                onChange={(e) => setForm({ ...form, nama: e.target.value })}
+                                placeholder="Nama Barang"
+                                value={form.nama_barang}
+                                onChange={(e) =>
+                                    setForm({ ...form, nama_barang: e.target.value })
+                                }
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="Alamat"
-                                value={form.alamat}
-                                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+                                type="number"
+                                placeholder="Qty"
+                                value={form.qty}
+                                onChange={(e) =>
+                                    setForm({ ...form, qty: Number(e.target.value) })
+                                }
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="No Telepon"
-                                value={form.no_telp}
-                                onChange={(e) => setForm({ ...form, no_telp: e.target.value })}
+                                placeholder="Satuan"
+                                value={form.satuan}
+                                onChange={(e) =>
+                                    setForm({ ...form, satuan: e.target.value })
+                                }
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="Kategori Supplier"
-                                value={form.kategori}
-                                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
+                                type="number"
+                                placeholder="Harga Satuan"
+                                value={form.harga_satuan}
+                                onChange={(e) =>
+                                    setForm({ ...form, harga_satuan: Number(e.target.value) })
+                                }
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                placeholder="Keterangan"
+                                value={form.keterangan}
+                                onChange={(e) =>
+                                    setForm({ ...form, keterangan: e.target.value })
+                                }
                                 className="w-full border p-2 rounded-md"
                             />
 
@@ -311,14 +315,12 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* MODAL DELETE */}
+            {/* DELETE MODAL */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                Hapus Data?
-                            </h2>
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
 
                             <div className="flex justify-center gap-2">
                                 <button

@@ -26,6 +26,8 @@ import {
   TrendingUp,
   Landmark,
   BaggageClaim,
+  ScrollText,
+  ArrowLeftRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
@@ -52,13 +54,12 @@ const menus = [
   },
   {
     label: "Transaksi Pembelian",
-    icon: <BaggageClaim />,
+    icon: <ArrowLeftRight />,
     key: "pembelian",
     children: [
-      { icon: <ClipboardList size={16} />, label: "Pengajuan Purchase Order", path: "/admin/pembelian/po" },
-      { icon: <PackageCheck size={16} />, label: "Validasi Harga", path: "/admin/pembelian/validasi" },
-      { icon: <Banknote size={16} />, label: "Invoice Pembayaran", path: "/admin/pembelian/invoice" },
-      { icon: <Truck size={16} />, label: "Riwayat Kedatangan Barang", path: "/admin/pembelian/kedatangan" },
+      { icon: <ClipboardList size={16} />, label: "List Order & Penawaran", path: "/admin/transaksiPembelian/listorderpenawaran" },
+      { icon: <BaggageClaim size={16} />, label: "Daftar Pembelanjaan", path: "/admin/transaksiPembelian/daftarpembelanjaan" },
+      { icon: <ScrollText size={16} />, label: "Daftar Pembelanjaan Supplier", path: "/admin/transaksiPembelian/daftarpembelanjaansupplier" },
     ],
   },
   {
@@ -68,9 +69,7 @@ const menus = [
     children: [
       { icon: <ScanLine size={16} />, label: "Cek Stok & Opname", path: "/admin/warehouse/stok" },
       { icon: <ArrowDownUp size={16} />, label: "Inbound", path: "/admin/warehouse/inbound" },
-      { icon: <PackageCheck size={16} />, label: "Picking & Packing", path: "/admin/warehouse/picking" },
-      { icon: <LayoutGrid size={16} />, label: "Penataan Slot", path: "/admin/warehouse/slot" },
-      { icon: <PackageSearch size={16} />, label: "Inventory Adjustment", path: "/admin/warehouse/adjustment" },
+      { icon: <PackageSearch size={16} />, label: "Retur/Rusak", path: "/admin/warehouse/retur" },
     ],
   },
   {

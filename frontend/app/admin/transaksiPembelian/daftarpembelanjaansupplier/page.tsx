@@ -7,27 +7,23 @@ import { motion, AnimatePresence } from "framer-motion";
 /* ================= TYPE ================= */
 type Product = {
     id: number;
-    nama: string;
-    alamat: string;
-    no_telp: string;
-    kategori: string;
+    nama_unit: string;
+    no_pol: string;
+    jenis_kendaraan: string;
 };
 
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
     const [data, setData] = useState<Product[]>([
-        { id: 1, nama: "Asikin Aurelia", alamat: "Ploso", no_telp: "08123456789", kategori: "Retail" },
-        { id: 2, nama: "PT Santika", alamat: "Jakarta", no_telp: "08234567890", kategori: "Distributor" },
-        { id: 3, nama: "CV Aulia", alamat: "Bandung", no_telp: "08345678901", kategori: "Grosir" },
-        { id: 4, nama: "PT Maju Jaya", alamat: "Surabaya", no_telp: "08456789012", kategori: "Supplier" },
+        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Truck" },
+        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Pickup" },
     ]);
 
     const [form, setForm] = useState<FormType>({
-        nama: "",
-        alamat: "",
-        no_telp: "",
-        kategori: "",
+        nama_unit: "",
+        no_pol: "",
+        jenis_kendaraan: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
@@ -38,7 +34,7 @@ export default function Page() {
     const [search, setSearch] = useState("");
 
     /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Product>("nama");
+    const [sortField, setSortField] = useState<keyof Product>("nama_unit");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     /* ================= PAGINATION ================= */
@@ -48,7 +44,7 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = () => {
-        if (!form.nama || !form.alamat || !form.no_telp || !form.kategori) return;
+        if (!form.nama_unit || !form.no_pol || !form.jenis_kendaraan) return;
 
         if (editId) {
             setData((prev) =>
@@ -81,7 +77,7 @@ export default function Page() {
     };
 
     const resetForm = () => {
-        setForm({ nama: "", alamat: "", no_telp: "", kategori: "" });
+        setForm({ nama_unit: "", no_pol: "", jenis_kendaraan: "" });
         setEditId(null);
         setOpenForm(false);
     };
@@ -103,8 +99,8 @@ export default function Page() {
         if (search) {
             result = result.filter(
                 (item) =>
-                    item.nama.toLowerCase().includes(search.toLowerCase()) ||
-                    item.alamat.toLowerCase().includes(search.toLowerCase())
+                    item.nama_unit.toLowerCase().includes(search.toLowerCase()) ||
+                    item.no_pol.toLowerCase().includes(search.toLowerCase())
             );
         }
 
@@ -140,15 +136,13 @@ export default function Page() {
 
     return (
         <div className="p-6 space-y-6">
-            {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Supplier</h1>
+                <h1 className="text-xl font-bold">Daftar Pembelanjaan Supplier</h1>
             </div>
 
             <div className="flex items-center justify-between">
-                {/* FILTER */}
                 <input
-                    placeholder="Cari nama atau alamat..."
+                    placeholder="Cari nama unit atau no polisi..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
@@ -171,26 +165,20 @@ export default function Page() {
                             <th className="p-3">No</th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("nama")} className="flex items-center gap-2">
-                                    Nama <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("nama_unit")} className="flex items-center gap-2">
+                                    Nama Unit <ArrowUpDown size={14} />
                                 </button>
                             </th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("alamat")} className="flex items-center gap-2">
-                                    Alamat <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("no_pol")} className="flex items-center gap-2">
+                                    No Polisi <ArrowUpDown size={14} />
                                 </button>
                             </th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("no_telp")} className="flex items-center gap-2">
-                                    No Telp <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("kategori")} className="flex items-center gap-2">
-                                    Kategori <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("jenis_kendaraan")} className="flex items-center gap-2">
+                                    Jenis Kendaraan <ArrowUpDown size={14} />
                                 </button>
                             </th>
 
@@ -204,10 +192,9 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama}</td>
-                                <td className="p-3">{item.alamat}</td>
-                                <td className="p-3">{item.no_telp}</td>
-                                <td className="p-3">{item.kategori}</td>
+                                <td className="p-3">{item.nama_unit}</td>
+                                <td className="p-3">{item.no_pol}</td>
+                                <td className="p-3">{item.jenis_kendaraan}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -270,30 +257,23 @@ export default function Page() {
                             </h2>
 
                             <input
-                                placeholder="Nama"
-                                value={form.nama}
-                                onChange={(e) => setForm({ ...form, nama: e.target.value })}
+                                placeholder="Nama Unit"
+                                value={form.nama_unit}
+                                onChange={(e) => setForm({ ...form, nama_unit: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="Alamat"
-                                value={form.alamat}
-                                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+                                placeholder="No Polisi"
+                                value={form.no_pol}
+                                onChange={(e) => setForm({ ...form, no_pol: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="No Telepon"
-                                value={form.no_telp}
-                                onChange={(e) => setForm({ ...form, no_telp: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                placeholder="Kategori Supplier"
-                                value={form.kategori}
-                                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
+                                placeholder="Jenis Kendaraan"
+                                value={form.jenis_kendaraan}
+                                onChange={(e) => setForm({ ...form, jenis_kendaraan: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
