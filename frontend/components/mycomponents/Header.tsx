@@ -11,13 +11,13 @@ export default function Header({ onToggle }: { onToggle: () => void }) {
         <button onClick={onToggle}>
           <Menu className="w-6 h-6" />
         </button>
-        <h1 className="font-semibold text-lg">Dashboard</h1>
+        <h1 className="font-semibold text-lg">Admin</h1>
       </div>
 
       {/* RIGHT */}
       <div className="flex items-center gap-4">
-        <Bell className="w-5 h-5 cursor-pointer" />
-        <User className="w-5 h-5 cursor-pointer" />
+        <p>Hi' Syahril</p>
+        <User className="w-8 h-8 p-2 rounded-full cursor-pointer bg-gray-200 text-primary" />
       </div>
     </header>
   );

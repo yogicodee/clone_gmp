@@ -184,7 +184,7 @@ export default function DetailPage() {
 
                 <button
                     onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg"
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
                     Tambah Barang
@@ -197,15 +197,15 @@ export default function DetailPage() {
                     <thead className="bg-gray-100">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3">
+                            <th className="p-3 text-left">
                                 <button onClick={() => handleSort("nama_barang")} className="flex gap-2">
                                     Nama Barang <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3">Qty</th>
-                            <th className="p-3">Satuan</th>
-                            <th className="p-3">Harga</th>
-                            <th className="p-3">Keterangan</th>
+                            <th className="p-3 text-left">Qty</th>
+                            <th className="p-3 text-left">Satuan</th>
+                            <th className="p-3 text-left">Harga Penawaran</th>
+                            <th className="p-3 text-left">Keterangan</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>

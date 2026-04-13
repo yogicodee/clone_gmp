@@ -28,6 +28,7 @@ import {
   BaggageClaim,
   ScrollText,
   ArrowLeftRight,
+  CircleDollarSign,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
@@ -67,8 +68,9 @@ const menus = [
     icon: <Warehouse />,
     key: "warehouse",
     children: [
-      { icon: <ScanLine size={16} />, label: "Cek Stok & Opname", path: "/admin/warehouse/stok" },
       { icon: <ArrowDownUp size={16} />, label: "Inbound", path: "/admin/warehouse/inbound" },
+      { icon: <ScanLine size={16} />, label: "Cek Stok (Kering)", path: "/admin/warehouse/stokKering" },
+      { icon: <ScanLine size={16} />, label: "Cek Stok (Basah)", path: "/admin/warehouse/stokBasah" },
       { icon: <PackageSearch size={16} />, label: "Retur/Rusak", path: "/admin/warehouse/retur" },
     ],
   },
@@ -77,10 +79,9 @@ const menus = [
     icon: <ShoppingCart />,
     key: "transaksipenjualan",
     children: [
-      { icon: <ClipboardList size={16} />, label: "Pendataan PO SPPG", path: "/admin/penjualan/po" },
-      { icon: <FileText size={16} />, label: "Invoice Penerbitan", path: "/admin/penjualan/invoice" },
-      { icon: <ShieldCheck size={16} />, label: "Validasi Pembayaran", path: "/admin/penjualan/validasi" },
-      { icon: <Banknote size={16} />, label: "Invoice Pelunasan", path: "/admin/penjualan/pelunasan" },
+      { icon: <CircleDollarSign size={16} />, label: "Penjualan", path: "/admin/transaksi-penjualan/penjualan" },
+      { icon: <FileText size={16} />, label: "Invoice Penjualan", path: "/admin/transaksi-penjualan/invoice-penjualan" },
+      
     ],
   },
   {
@@ -111,12 +112,12 @@ export default function Sidebar({ open }: { open: boolean }) {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen bg-primary/10 shadow-md border-r transition-all duration-300 flex flex-col
+      className={`fixed top-0 left-0 h-screen text-gray-200 bg-linear-to-br from-primary to-red-950 shadow-md border-r transition-all duration-300 flex flex-col
       ${open ? "w-64" : "w-20"}`}
     >
       {/* HEADER */}
-      <div className="h-16 flex items-center justify-center font-bold text-lg border-b">
-        {open ? "Admin Panel" : "AP"}
+      <div className="h-16 flex items-center justify-center font-bold text-lg border-b text-gray-300">
+        {open ? "Garuda Merah Putih" : "GMP"}
       </div>
 
       {/* 🔥 SCROLL FIX DI SINI */}
@@ -134,7 +135,7 @@ export default function Sidebar({ open }: { open: boolean }) {
           <div key={menu.key}>
             <div
               onClick={() => toggleMenu(menu.key)}
-              className={`flex items-center ${open ? "justify-between px-3" : "justify-center"} py-3 rounded-lg hover:bg-gray-100 cursor-pointer group relative`}
+              className={`flex items-center ${open ? "justify-between px-3" : "justify-center"} py-3 rounded-lg hover:bg-gray-200/20 cursor-pointer group relative`}
             >
               <div className="flex items-center gap-3">
                 {menu.icon}
@@ -173,20 +174,7 @@ export default function Sidebar({ open }: { open: boolean }) {
             </AnimatePresence>
           </div>
         ))}
-
-        <SidebarItem
-          icon={<Settings />}
-          label="Settings"
-          open={open}
-          active={pathname === "/admin/settings"}
-          onClick={() => router.push("/admin/settings")}
-        />
       </nav>
-
-      {/* FOOTER */}
-      <div className="p-4 border-t text-center text-xs text-gray-500">
-        © 2026
-      </div>
     </aside>
   );
 }
@@ -197,8 +185,8 @@ function SidebarItem({ icon, label, open, onClick, active }: any) {
     <div
       onClick={onClick}
       className={`flex items-center ${open ? "gap-3 px-3" : "justify-center"
-        } py-3 rounded-lg cursor-pointer
-      ${active ? "bg-primary/10 text-primary font-semibold" : "hover:bg-gray-100"}`}
+        } py-3 rounded-lg cursor-pointer text-gray-200
+      ${active ? "bg-gray-200 text-primary font-semibold" : "hover:bg-gray-200/20"}`}
     >
       {icon}
       {open && <span className="text-sm">{label}</span>}
@@ -212,8 +200,8 @@ function SubItem({ icon, label, onClick, active }: any) {
       onClick={onClick}
       className={`flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer text-sm
       ${active
-          ? "bg-primary/10 text-primary font-medium"
-          : "text-gray-600 hover:bg-gray-100"
+          ? "bg-gray-200 text-primary font-medium"
+          : "text-gray-200 hover:bg-gray-200/20"
         }`}
     >
       {icon}

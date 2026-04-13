@@ -7,23 +7,30 @@ import { motion, AnimatePresence } from "framer-motion";
 /* ================= TYPE ================= */
 type Product = {
     id: number;
-    nama_unit: string;
-    no_pol: string;
-    jenis_kendaraan: string;
+    nama_barang: string;
+    qty: number;
+    satuan_terkecil: string;
+    harga_beli: number;
 };
 
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
     const [data, setData] = useState<Product[]>([
-        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Truck" },
-        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Pickup" },
+        {
+            id: 1,
+            nama_barang: "Beras",
+            qty: 10,
+            satuan_terkecil: "Kg",
+            harga_beli: 12000,
+        },
     ]);
 
     const [form, setForm] = useState<FormType>({
-        nama_unit: "",
-        no_pol: "",
-        jenis_kendaraan: "",
+        nama_barang: "",
+        qty: 0,
+        satuan_terkecil: "",
+        harga_beli: 0,
     });
 
     const [editId, setEditId] = useState<number | null>(null);
@@ -34,7 +41,7 @@ export default function Page() {
     const [search, setSearch] = useState("");
 
     /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Product>("nama_unit");
+    const [sortField, setSortField] = useState<keyof Product>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     /* ================= PAGINATION ================= */
@@ -44,7 +51,7 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = () => {
-        if (!form.nama_unit || !form.no_pol || !form.jenis_kendaraan) return;
+        if (!form.nama_barang) return;
 
         if (editId) {
             setData((prev) =>
@@ -77,7 +84,12 @@ export default function Page() {
     };
 
     const resetForm = () => {
-        setForm({ nama_unit: "", no_pol: "", jenis_kendaraan: "" });
+        setForm({
+            nama_barang: "",
+            qty: 0,
+            satuan_terkecil: "",
+            harga_beli: 0,
+        });
         setEditId(null);
         setOpenForm(false);
     };
@@ -97,10 +109,8 @@ export default function Page() {
         let result = [...data];
 
         if (search) {
-            result = result.filter(
-                (item) =>
-                    item.nama_unit.toLowerCase().includes(search.toLowerCase()) ||
-                    item.no_pol.toLowerCase().includes(search.toLowerCase())
+            result = result.filter((item) =>
+                item.nama_barang.toLowerCase().includes(search.toLowerCase())
             );
         }
 
@@ -137,12 +147,12 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Armada</h1>
+                <h1 className="text-xl font-bold">Stok Bahan Basah</h1>
             </div>
 
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari nama unit atau no polisi..."
+                    placeholder="Cari barang..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
@@ -165,22 +175,14 @@ export default function Page() {
                             <th className="p-3">No</th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("nama_unit")} className="flex items-center gap-2">
-                                    Nama Unit <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
+                                    Nama Barang <ArrowUpDown size={14} />
                                 </button>
                             </th>
 
-                            <th className="p-3">
-                                <button onClick={() => handleSort("no_pol")} className="flex items-center gap-2">
-                                    No Polisi <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("jenis_kendaraan")} className="flex items-center gap-2">
-                                    Jenis Kendaraan <ArrowUpDown size={14} />
-                                </button>
-                            </th>
+                            <th className="p-3 text-left">Qty</th>
+                            <th className="p-3 text-left">Satuan</th>
+                            <th className="p-3 text-left">Harga Beli</th>
 
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
@@ -192,9 +194,11 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama_unit}</td>
-                                <td className="p-3">{item.no_pol}</td>
-                                <td className="p-3">{item.jenis_kendaraan}</td>
+
+                                <td className="p-3">{item.nama_barang}</td>
+                                <td className="p-3">{item.qty}</td>
+                                <td className="p-3">{item.satuan_terkecil}</td>
+                                <td className="p-3">{item.harga_beli}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -231,8 +235,7 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
@@ -257,23 +260,32 @@ export default function Page() {
                             </h2>
 
                             <input
-                                placeholder="Nama Unit"
-                                value={form.nama_unit}
-                                onChange={(e) => setForm({ ...form, nama_unit: e.target.value })}
+                                placeholder="Nama Barang"
+                                value={form.nama_barang}
+                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="No Polisi"
-                                value={form.no_pol}
-                                onChange={(e) => setForm({ ...form, no_pol: e.target.value })}
+                                type="number"
+                                placeholder="Qty"
+                                value={form.qty}
+                                onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })}
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="Jenis Kendaraan"
-                                value={form.jenis_kendaraan}
-                                onChange={(e) => setForm({ ...form, jenis_kendaraan: e.target.value })}
+                                placeholder="Satuan Terkecil"
+                                value={form.satuan_terkecil}
+                                onChange={(e) => setForm({ ...form, satuan_terkecil: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                type="number"
+                                placeholder="Harga Beli"
+                                value={form.harga_beli}
+                                onChange={(e) => setForm({ ...form, harga_beli: Number(e.target.value) })}
                                 className="w-full border p-2 rounded-md"
                             />
 
@@ -291,14 +303,12 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* MODAL DELETE */}
+            {/* DELETE MODAL */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                Hapus Data?
-                            </h2>
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
 
                             <div className="flex justify-center gap-2">
                                 <button
@@ -324,13 +334,7 @@ export default function Page() {
 }
 
 /* ================= MODAL ================= */
-function Modal({
-    children,
-    onClose,
-}: {
-    children: React.ReactNode;
-    onClose: () => void;
-}) {
+function Modal({ children, onClose }: any) {
     return (
         <motion.div
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"

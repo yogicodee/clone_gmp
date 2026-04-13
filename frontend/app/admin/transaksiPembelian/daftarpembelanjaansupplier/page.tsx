@@ -1,29 +1,28 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 /* ================= TYPE ================= */
-type Product = {
+type Order = {
     id: number;
-    nama_unit: string;
-    no_pol: string;
-    jenis_kendaraan: string;
+    tanggal_pesan: string;
 };
 
-type FormType = Omit<Product, "id">;
+type FormType = Omit<Order, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Truck" },
-        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Pickup" },
+    const router = useRouter();
+
+    const [data, setData] = useState<Order[]>([
+        { id: 1, tanggal_pesan: "2026-04-01" },
+        { id: 2, tanggal_pesan: "2026-04-02" },
     ]);
 
     const [form, setForm] = useState<FormType>({
-        nama_unit: "",
-        no_pol: "",
-        jenis_kendaraan: "",
+        tanggal_pesan: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
@@ -31,10 +30,10 @@ export default function Page() {
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
     /* ================= FILTER ================= */
-    const [search, setSearch] = useState("");
+    const [filterTanggal, setFilterTanggal] = useState("");
 
     /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Product>("nama_unit");
+    const [sortField, setSortField] = useState<keyof Order>("tanggal_pesan");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     /* ================= PAGINATION ================= */
@@ -44,7 +43,7 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = () => {
-        if (!form.nama_unit || !form.no_pol || !form.jenis_kendaraan) return;
+        if (!form.tanggal_pesan) return;
 
         if (editId) {
             setData((prev) =>
@@ -62,7 +61,7 @@ export default function Page() {
         resetForm();
     };
 
-    const handleEdit = (item: Product) => {
+    const handleEdit = (item: Order) => {
         const { id, ...rest } = item;
         setForm(rest);
         setEditId(id);
@@ -77,12 +76,12 @@ export default function Page() {
     };
 
     const resetForm = () => {
-        setForm({ nama_unit: "", no_pol: "", jenis_kendaraan: "" });
+        setForm({ tanggal_pesan: "" });
         setEditId(null);
         setOpenForm(false);
     };
 
-    const handleSort = (field: keyof Product) => {
+    const handleSort = (field: keyof Order) => {
         if (sortField === field) {
             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
         } else {
@@ -96,24 +95,22 @@ export default function Page() {
     const filteredData = useMemo(() => {
         let result = [...data];
 
-        if (search) {
+        if (filterTanggal) {
             result = result.filter(
-                (item) =>
-                    item.nama_unit.toLowerCase().includes(search.toLowerCase()) ||
-                    item.no_pol.toLowerCase().includes(search.toLowerCase())
+                (item) => item.tanggal_pesan === filterTanggal
             );
         }
 
         result.sort((a, b) => {
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
+            const aVal = a[sortField];
+            const bVal = b[sortField];
 
             if (sortOrder === "asc") return aVal.localeCompare(bVal);
             return bVal.localeCompare(aVal);
         });
 
         return result;
-    }, [data, search, sortField, sortOrder]);
+    }, [data, filterTanggal, sortField, sortOrder]);
 
     /* ================= PAGINATION ================= */
 
@@ -126,7 +123,7 @@ export default function Page() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search]);
+    }, [filterTanggal]);
 
     useEffect(() => {
         if (currentPage > totalPages) {
@@ -140,17 +137,18 @@ export default function Page() {
                 <h1 className="text-xl font-bold">Daftar Pembelanjaan Supplier</h1>
             </div>
 
+            {/* FILTER */}
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari nama unit atau no polisi..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="border p-2 rounded-md w-1/4 bg-white shadow"
+                    type="date"
+                    value={filterTanggal}
+                    onChange={(e) => setFilterTanggal(e.target.value)}
+                    className="border p-2 rounded-md bg-white shadow"
                 />
 
                 <button
                     onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg"
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
                     Tambah Data
@@ -163,25 +161,14 @@ export default function Page() {
                     <thead className="bg-gray-100">
                         <tr>
                             <th className="p-3">No</th>
-
                             <th className="p-3">
-                                <button onClick={() => handleSort("nama_unit")} className="flex items-center gap-2">
-                                    Nama Unit <ArrowUpDown size={14} />
+                                <button
+                                    onClick={() => handleSort("tanggal_pesan")}
+                                    className="flex gap-2"
+                                >
+                                    Tgl Pesan <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("no_pol")} className="flex items-center gap-2">
-                                    No Polisi <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("jenis_kendaraan")} className="flex items-center gap-2">
-                                    Jenis Kendaraan <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -192,11 +179,18 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama_unit}</td>
-                                <td className="p-3">{item.no_pol}</td>
-                                <td className="p-3">{item.jenis_kendaraan}</td>
+                                <td className="p-3">{item.tanggal_pesan}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
+                                    <button
+                                        onClick={() =>
+                                            router.push(`/admin/transaksiPembelian/daftarpembelanjaansupplier/detail/${item.id}`)
+                                        }
+                                        className="p-2 bg-green-500/30 text-green-700 rounded-md"
+                                    >
+                                        <Eye size={14} />
+                                    </button>
+
                                     <button
                                         onClick={() => handleEdit(item)}
                                         className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
@@ -257,32 +251,29 @@ export default function Page() {
                             </h2>
 
                             <input
-                                placeholder="Nama Unit"
-                                value={form.nama_unit}
-                                onChange={(e) => setForm({ ...form, nama_unit: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                placeholder="No Polisi"
-                                value={form.no_pol}
-                                onChange={(e) => setForm({ ...form, no_pol: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                placeholder="Jenis Kendaraan"
-                                value={form.jenis_kendaraan}
-                                onChange={(e) => setForm({ ...form, jenis_kendaraan: e.target.value })}
+                                type="date"
+                                value={form.tanggal_pesan}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        tanggal_pesan: e.target.value,
+                                    })
+                                }
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <div className="flex justify-end gap-2">
-                                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
+                                <button
+                                    onClick={resetForm}
+                                    className="px-4 py-2 bg-gray-200 rounded-md"
+                                >
                                     Batal
                                 </button>
 
-                                <button onClick={handleSubmit} className="px-4 py-2 bg-blue-700 text-white rounded-md">
+                                <button
+                                    onClick={handleSubmit}
+                                    className="px-4 py-2 bg-blue-700 text-white rounded-md"
+                                >
                                     Simpan
                                 </button>
                             </div>
@@ -291,14 +282,12 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* MODAL DELETE */}
+            {/* DELETE MODAL */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                Hapus Data?
-                            </h2>
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
 
                             <div className="flex justify-center gap-2">
                                 <button
@@ -336,9 +325,7 @@ function Modal({
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
             onClick={onClose}
         >
-            <div onClick={(e) => e.stopPropagation()}>
-                {children}
-            </div>
+            <div onClick={(e) => e.stopPropagation()}>{children}</div>
         </motion.div>
     );
 }

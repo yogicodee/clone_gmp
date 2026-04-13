@@ -172,7 +172,7 @@ export default function Page() {
 
                 <button
                     onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg"
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
                     Tambah Data
@@ -200,7 +200,7 @@ export default function Page() {
                                     Nama <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3">Keterangan</th>
+                            <th className="p-3 text-left">Keterangan</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>

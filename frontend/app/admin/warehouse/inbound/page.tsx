@@ -7,23 +7,38 @@ import { motion, AnimatePresence } from "framer-motion";
 /* ================= TYPE ================= */
 type Product = {
     id: number;
-    nama_unit: string;
-    no_pol: string;
-    jenis_kendaraan: string;
+    nama_barang: string;
+    tanggal_masuk: string;
+    qty: number;
+    satuan: string;
+    harga_satuan: number;
+    total_harga: number;
+    nama_supplier: string;
 };
 
-type FormType = Omit<Product, "id">;
+type FormType = Omit<Product, "id" | "total_harga">;
 
 export default function Page() {
     const [data, setData] = useState<Product[]>([
-        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Truck" },
-        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Pickup" },
+        {
+            id: 1,
+            nama_barang: "Beras",
+            tanggal_masuk: "2026-04-01",
+            qty: 10,
+            satuan: "Kg",
+            harga_satuan: 12000,
+            total_harga: 120000,
+            nama_supplier: "PT Sumber Pangan",
+        },
     ]);
 
     const [form, setForm] = useState<FormType>({
-        nama_unit: "",
-        no_pol: "",
-        jenis_kendaraan: "",
+        nama_barang: "",
+        tanggal_masuk: "",
+        qty: 0,
+        satuan: "",
+        harga_satuan: 0,
+        nama_supplier: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
@@ -34,7 +49,7 @@ export default function Page() {
     const [search, setSearch] = useState("");
 
     /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Product>("nama_unit");
+    const [sortField, setSortField] = useState<keyof Product>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     /* ================= PAGINATION ================= */
@@ -44,18 +59,26 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = () => {
-        if (!form.nama_unit || !form.no_pol || !form.jenis_kendaraan) return;
+        if (!form.nama_barang) return;
+
+        const total = form.qty * form.harga_satuan;
 
         if (editId) {
             setData((prev) =>
                 prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
+                    item.id === editId
+                        ? { ...item, ...form, total_harga: total }
+                        : item
                 )
             );
         } else {
             setData((prev) => [
                 ...prev,
-                { id: Date.now(), ...form },
+                {
+                    id: Date.now(),
+                    ...form,
+                    total_harga: total,
+                },
             ]);
         }
 
@@ -63,7 +86,7 @@ export default function Page() {
     };
 
     const handleEdit = (item: Product) => {
-        const { id, ...rest } = item;
+        const { id, total_harga, ...rest } = item;
         setForm(rest);
         setEditId(id);
         setOpenForm(true);
@@ -77,7 +100,14 @@ export default function Page() {
     };
 
     const resetForm = () => {
-        setForm({ nama_unit: "", no_pol: "", jenis_kendaraan: "" });
+        setForm({
+            nama_barang: "",
+            tanggal_masuk: "",
+            qty: 0,
+            satuan: "",
+            harga_satuan: 0,
+            nama_supplier: "",
+        });
         setEditId(null);
         setOpenForm(false);
     };
@@ -99,8 +129,8 @@ export default function Page() {
         if (search) {
             result = result.filter(
                 (item) =>
-                    item.nama_unit.toLowerCase().includes(search.toLowerCase()) ||
-                    item.no_pol.toLowerCase().includes(search.toLowerCase())
+                    item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
+                    item.nama_supplier.toLowerCase().includes(search.toLowerCase())
             );
         }
 
@@ -137,12 +167,12 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Armada</h1>
+                <h1 className="text-xl font-bold">Data Barang Masuk</h1>
             </div>
 
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari nama unit atau no polisi..."
+                    placeholder="Cari barang / supplier..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
@@ -165,22 +195,17 @@ export default function Page() {
                             <th className="p-3">No</th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("nama_unit")} className="flex items-center gap-2">
-                                    Nama Unit <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
+                                    Nama Barang <ArrowUpDown size={14} />
                                 </button>
                             </th>
 
-                            <th className="p-3">
-                                <button onClick={() => handleSort("no_pol")} className="flex items-center gap-2">
-                                    No Polisi <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
-                                <button onClick={() => handleSort("jenis_kendaraan")} className="flex items-center gap-2">
-                                    Jenis Kendaraan <ArrowUpDown size={14} />
-                                </button>
-                            </th>
+                            <th className="p-3 text-left">Tanggal</th>
+                            <th className="p-3 text-left">Qty</th>
+                            <th className="p-3 text-left">Satuan</th>
+                            <th className="p-3 text-left">Harga</th>
+                            <th className="p-3 text-left">Total</th>
+                            <th className="p-3 text-left">Supplier</th>
 
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
@@ -192,9 +217,14 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama_unit}</td>
-                                <td className="p-3">{item.no_pol}</td>
-                                <td className="p-3">{item.jenis_kendaraan}</td>
+
+                                <td className="p-3">{item.nama_barang}</td>
+                                <td className="p-3">{item.tanggal_masuk}</td>
+                                <td className="p-3">{item.qty}</td>
+                                <td className="p-3">{item.satuan}</td>
+                                <td className="p-3">{item.harga_satuan}</td>
+                                <td className="p-3">{item.total_harga}</td>
+                                <td className="p-3">{item.nama_supplier}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -247,7 +277,7 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* FORM MODAL */}
+            {/* FORM MODAL (STYLE TIDAK DIUBAH) */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
@@ -257,23 +287,46 @@ export default function Page() {
                             </h2>
 
                             <input
-                                placeholder="Nama Unit"
-                                value={form.nama_unit}
-                                onChange={(e) => setForm({ ...form, nama_unit: e.target.value })}
+                                placeholder="Nama Barang"
+                                value={form.nama_barang}
+                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="No Polisi"
-                                value={form.no_pol}
-                                onChange={(e) => setForm({ ...form, no_pol: e.target.value })}
+                                type="date"
+                                value={form.tanggal_masuk}
+                                onChange={(e) => setForm({ ...form, tanggal_masuk: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                placeholder="Jenis Kendaraan"
-                                value={form.jenis_kendaraan}
-                                onChange={(e) => setForm({ ...form, jenis_kendaraan: e.target.value })}
+                                type="number"
+                                placeholder="Qty"
+                                value={form.qty}
+                                onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                placeholder="Satuan"
+                                value={form.satuan}
+                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                type="number"
+                                placeholder="Harga Satuan"
+                                value={form.harga_satuan}
+                                onChange={(e) => setForm({ ...form, harga_satuan: Number(e.target.value) })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                placeholder="Nama Supplier"
+                                value={form.nama_supplier}
+                                onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
@@ -291,14 +344,12 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* MODAL DELETE */}
+            {/* DELETE MODAL */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                Hapus Data?
-                            </h2>
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
 
                             <div className="flex justify-center gap-2">
                                 <button
@@ -324,13 +375,7 @@ export default function Page() {
 }
 
 /* ================= MODAL ================= */
-function Modal({
-    children,
-    onClose,
-}: {
-    children: React.ReactNode;
-    onClose: () => void;
-}) {
+function Modal({ children, onClose }: any) {
     return (
         <motion.div
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
