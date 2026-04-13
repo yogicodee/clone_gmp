@@ -22,6 +22,7 @@ npm run dev
 ```bash
 git add frontend
 git commit -m ""
+git pull origin main --rebase
 git push origin main
 ```
 
@@ -30,6 +31,7 @@ git push origin main
 ```bash
 git add backend
 git commit -m ""
+git pull origin main --rebase
 git push origin main
 ```
 
