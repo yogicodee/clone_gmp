@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\WarehouseInbound;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class WarehouseInboundController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string'],
+            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'tanggal_masuk', 'qty', 'satuan', 'harga_satuan', 'total_harga', 'nama_supplier'])],
+            'sort_order' => ['nullable', Rule::in(['asc', 'desc'])],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $search = $filters['search'] ?? null;
+        $sortField = $filters['sort_field'] ?? 'tanggal_masuk';
+        $sortOrder = $filters['sort_order'] ?? 'desc';
+        $perPage = $filters['per_page'] ?? 10;
+
+        $records = WarehouseInbound::query()
+            ->when($search, function ($query, string $keyword) {
+                $query->where(function ($subQuery) use ($keyword): void {
+                    $subQuery
+                        ->where('nama_barang', 'like', '%'.$keyword.'%')
+                        ->orWhere('nama_supplier', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->orderBy($sortField, $sortOrder)
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return response()->json([
+            'message' => 'Data inbound berhasil diambil.',
+            'data' => $records->items(),
+            'meta' => [
+                'current_page' => $records->currentPage(),
+                'last_page' => $records->lastPage(),
+                'per_page' => $records->perPage(),
+                'total' => $records->total(),
+                'from' => $records->firstItem(),
+                'to' => $records->lastItem(),
+            ],
+        ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $payload = $this->validatePayload($request);
+        $payload['total_harga'] = $this->calculateTotalHarga($payload['qty'], $payload['harga_satuan']);
+
+        $record = WarehouseInbound::query()->create($payload);
+
+        return response()->json([
+            'message' => 'Data inbound berhasil ditambahkan.',
+            'data' => $record,
+        ], 201);
+    }
+
+    public function show(WarehouseInbound $inbound): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Detail inbound berhasil diambil.',
+            'data' => $inbound,
+        ]);
+    }
+
+    public function update(Request $request, WarehouseInbound $inbound): JsonResponse
+    {
+        $payload = $this->validatePayload($request);
+        $payload['total_harga'] = $this->calculateTotalHarga($payload['qty'], $payload['harga_satuan']);
+
+        $inbound->update($payload);
+
+        return response()->json([
+            'message' => 'Data inbound berhasil diperbarui.',
+            'data' => $inbound->fresh(),
+        ]);
+    }
+
+    public function destroy(WarehouseInbound $inbound): JsonResponse
+    {
+        $inbound->delete();
+
+        return response()->json([
+            'message' => 'Data inbound berhasil dihapus.',
+        ]);
+    }
+
+    /**
+     * @return array{nama_barang:string,tanggal_masuk:string,qty:numeric-string|float|int,satuan:string,harga_satuan:numeric-string|float|int,nama_supplier:string}
+     */
+    private function validatePayload(Request $request): array
+    {
+        return $request->validate([
+            'nama_barang' => ['required', 'string', 'max:100'],
+            'tanggal_masuk' => ['required', 'date'],
+            'qty' => ['required', 'numeric', 'gt:0'],
+            'satuan' => ['required', 'string', 'max:50'],
+            'harga_satuan' => ['required', 'numeric', 'min:0'],
+            'nama_supplier' => ['required', 'string', 'max:100'],
+        ]);
+    }
+
+    /**
+     * @param numeric-string|float|int $qty
+     * @param numeric-string|float|int $hargaSatuan
+     */
+    private function calculateTotalHarga($qty, $hargaSatuan): float
+    {
+        return (float) $qty * (float) $hargaSatuan;
+    }
+}
