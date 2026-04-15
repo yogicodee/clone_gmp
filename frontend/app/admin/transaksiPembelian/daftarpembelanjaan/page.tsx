@@ -191,19 +191,7 @@ export default function Page() {
                                         <Eye size={14} />
                                     </button>
 
-                                    <button
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                   
                                 </td>
                             </tr>
                         ))}
@@ -283,32 +271,7 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE MODAL */}
-            <AnimatePresence>
-                {deleteId && (
-                    <Modal onClose={() => setDeleteId(null)}>
-                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
-
-                            <div className="flex justify-center gap-2">
-                                <button
-                                    onClick={() => setDeleteId(null)}
-                                    className="px-4 py-2 bg-gray-200 rounded-md"
-                                >
-                                    Batal
-                                </button>
-
-                                <button
-                                    onClick={handleDelete}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md"
-                                >
-                                    Hapus
-                                </button>
-                            </div>
-                        </motion.div>
-                    </Modal>
-                )}
-            </AnimatePresence>
+           
         </div>
     );
 }

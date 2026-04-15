@@ -31,6 +31,11 @@ export default function Page() {
         "LITER",
     ]);
 
+    const [listKategori, setListKategori] = useState([
+        "Kering",
+        "Basah",
+    ]);
+
     const [form, setForm] = useState<FormType>({
         sku: "",
         nama: "",
@@ -292,13 +297,21 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            <input
-                                placeholder="Kategori"
+                            {/* Selesct Kategori */}
+                            <select
                                 value={form.kategori}
                                 onChange={(e) => setForm({ ...form, kategori: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Kategori</option>
+                                {listKategori.map((item, i) => (
+                                    <option key={i} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
+                            {/* Selesct Satuan */}
                             <select
                                 value={form.satuan}
                                 onChange={(e) => setForm({ ...form, satuan: e.target.value })}

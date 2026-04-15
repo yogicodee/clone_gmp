@@ -41,23 +41,25 @@ export default function Page() {
         nama_supplier: "",
     });
 
+    const [hargaInput, setHargaInput] = useState("");
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
-
-    /* ================= SORT ================= */
     const [sortField, setSortField] = useState<keyof Product>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-    /* ================= PAGINATION ================= */
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    /* ================= HANDLE ================= */
+    /* ================= HELPER ================= */
+    const formatRupiah = (value: number | string) => {
+        const number = Number(value) || 0;
+        return number.toLocaleString("id-ID");
+    };
 
+    /* ================= HANDLE ================= */
     const handleSubmit = () => {
         if (!form.nama_barang) return;
 
@@ -88,6 +90,7 @@ export default function Page() {
     const handleEdit = (item: Product) => {
         const { id, total_harga, ...rest } = item;
         setForm(rest);
+        setHargaInput(formatRupiah(rest.harga_satuan));
         setEditId(id);
         setOpenForm(true);
     };
@@ -108,6 +111,7 @@ export default function Page() {
             harga_satuan: 0,
             nama_supplier: "",
         });
+        setHargaInput("");
         setEditId(null);
         setOpenForm(false);
     };
@@ -122,7 +126,6 @@ export default function Page() {
     };
 
     /* ================= FILTER + SORT ================= */
-
     const filteredData = useMemo(() => {
         let result = [...data];
 
@@ -146,7 +149,6 @@ export default function Page() {
     }, [data, search, sortField, sortOrder]);
 
     /* ================= PAGINATION ================= */
-
     const totalPages = Math.ceil(filteredData.length / perPage);
 
     const paginatedData = filteredData.slice(
@@ -180,7 +182,7 @@ export default function Page() {
 
                 <button
                     onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition"
                 >
                     <Plus size={16} />
                     Tambah Data
@@ -193,20 +195,17 @@ export default function Page() {
                     <thead className="bg-gray-100">
                         <tr>
                             <th className="p-3">No</th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
                                     Nama Barang <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3 text-left">Tanggal</th>
                             <th className="p-3 text-left">Qty</th>
                             <th className="p-3 text-left">Satuan</th>
                             <th className="p-3 text-left">Harga</th>
                             <th className="p-3 text-left">Total</th>
                             <th className="p-3 text-left">Supplier</th>
-
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -217,27 +216,19 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.tanggal_masuk}</td>
                                 <td className="p-3">{item.qty}</td>
                                 <td className="p-3">{item.satuan}</td>
-                                <td className="p-3">{item.harga_satuan}</td>
-                                <td className="p-3">{item.total_harga}</td>
+                                <td className="p-3">Rp {formatRupiah(item.harga_satuan)}</td>
+                                <td className="p-3">Rp {formatRupiah(item.total_harga)}</td>
                                 <td className="p-3">{item.nama_supplier}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
-                                    <button
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
-                                    >
+                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 rounded-md">
                                         <Pencil size={14} />
                                     </button>
-
-                                    <button
-                                        onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                                    >
+                                    <button onClick={() => setDeleteId(item.id)} className="p-2 bg-red-500/30 rounded-md">
                                         <Trash2 size={14} />
                                     </button>
                                 </td>
@@ -269,7 +260,7 @@ export default function Page() {
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -277,7 +268,7 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* FORM MODAL (STYLE TIDAK DIUBAH) */}
+            {/* FORM */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
@@ -308,33 +299,48 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            <input
-                                placeholder="Satuan"
+                            {/* SATUAN */}
+                            <select
                                 value={form.satuan}
                                 onChange={(e) => setForm({ ...form, satuan: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Satuan</option>
+                                <option value="Kg">Kg</option>
+                                <option value="Gram">Gram</option>
+                                <option value="Liter">Liter</option>
+                                <option value="Pcs">Pcs</option>
+                                <option value="Box">Box</option>
+                            </select>
 
+                            {/* HARGA */}
                             <input
-                                type="number"
                                 placeholder="Harga Satuan"
-                                value={form.harga_satuan}
-                                onChange={(e) => setForm({ ...form, harga_satuan: Number(e.target.value) })}
+                                value={hargaInput}
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "");
+                                    setHargaInput(formatRupiah(raw));
+                                    setForm({ ...form, harga_satuan: Number(raw) });
+                                }}
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            <input
-                                placeholder="Nama Supplier"
+                            {/* SUPPLIER */}
+                            <select
                                 value={form.nama_supplier}
                                 onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Supplier</option>
+                                <option value="PT Sumber Pangan">PT Sumber Pangan</option>
+                                <option value="PT Makmur Jaya">PT Makmur Jaya</option>
+                                <option value="CV Sejahtera">CV Sejahtera</option>
+                            </select>
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
                                     Batal
                                 </button>
-
                                 <button onClick={handleSubmit} className="px-4 py-2 bg-blue-700 text-white rounded-md">
                                     Simpan
                                 </button>
@@ -344,25 +350,17 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE MODAL */}
+            {/* DELETE */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
                             <h2 className="text-lg font-semibold">Hapus Data?</h2>
-
                             <div className="flex justify-center gap-2">
-                                <button
-                                    onClick={() => setDeleteId(null)}
-                                    className="px-4 py-2 bg-gray-200 rounded-md"
-                                >
+                                <button onClick={() => setDeleteId(null)} className="px-4 py-2 bg-gray-200 rounded-md">
                                     Batal
                                 </button>
-
-                                <button
-                                    onClick={handleDelete}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md"
-                                >
+                                <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded-md">
                                     Hapus
                                 </button>
                             </div>

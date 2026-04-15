@@ -4,10 +4,45 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Shield, UserCog } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [role, setRole] = useState<"admin" | "superadmin">("admin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await api.post("/auth/login", {
+        email,
+        password,
+        role,
+      });
+
+      const data = res.data;
+
+      // ✅ simpan token + user
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      router.push("/admin");
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Login gagal");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 text-center">
@@ -16,48 +51,60 @@ export default function LoginPage() {
         Login untuk melanjutkan ke sistem GMP.
       </p>
 
-      {/* ROLE SELECT */}
+      {/* ROLE */}
       <div className="grid grid-cols-2 gap-3">
-        {/* ADMIN */}
         <button
           type="button"
           onClick={() => setRole("admin")}
-          className={`flex flex-col items-center justify-center p-4 rounded-xl border transition ${role === "admin"
+          className={`p-4 rounded-xl border ${role === "admin"
             ? "border-primary bg-primary/10"
-            : "border-gray-200 hover:border-primary/50"
+            : ""
             }`}
         >
           <UserCog className="w-6 h-6 mb-2" />
-          <span className="text-sm font-medium">Admin</span>
+          Admin
         </button>
 
-        {/* SUPER ADMIN */}
         <button
           type="button"
           onClick={() => setRole("superadmin")}
-          className={`flex flex-col items-center justify-center p-4 rounded-xl border transition ${role === "superadmin"
+          className={`p-4 rounded-xl border ${role === "superadmin"
             ? "border-primary bg-primary/10"
-            : "border-gray-200 hover:border-primary/50"
+            : ""
             }`}
         >
           <Shield className="w-6 h-6 mb-2" />
-          <span className="text-sm font-medium">Super Admin</span>
+          Super Admin
         </button>
       </div>
 
       {/* FORM */}
-      <form className="space-y-4">
-        <Input type="email" placeholder="Email" />
-        <Input type="password" placeholder="Password" />
+      <form onSubmit={handleLogin} className="space-y-4">
+        <Input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
-        {/* Hidden role (biar bisa dikirim ke backend) */}
-        <input type="hidden" value={role} name="role" />
+        <Input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-        <Link href="/admin">
-          <Button className="w-full py-6 text-lg hover:bg-primary/90 cursor-pointer">
-            Login sebagai {role === "admin" ? "Admin" : "Super Admin"}
-          </Button>
-        </Link>
+        {error && (
+          <p className="text-red-500 text-sm">{error}</p>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full py-6 text-lg"
+          disabled={loading}
+        >
+          {loading ? "Loading..." : "Login"}
+        </Button>
       </form>
     </div>
   );

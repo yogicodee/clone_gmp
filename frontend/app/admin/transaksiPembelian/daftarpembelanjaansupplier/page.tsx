@@ -191,19 +191,7 @@ export default function Page() {
                                         <Eye size={14} />
                                     </button>
 
-                                    <button
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                    
                                 </td>
                             </tr>
                         ))}

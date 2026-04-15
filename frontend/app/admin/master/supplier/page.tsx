@@ -23,6 +23,11 @@ export default function Page() {
         { id: 4, nama: "PT Maju Jaya", alamat: "Surabaya", no_telp: "08456789012", kategori: "Supplier" },
     ]);
 
+    const [listKategori, setListKategori] = useState([
+        "Ikan",
+        "Sayur",
+    ]);
+
     const [form, setForm] = useState<FormType>({
         nama: "",
         alamat: "",
@@ -290,12 +295,19 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            <input
-                                placeholder="Kategori Supplier"
+                            {/* Selesct Kategori */}
+                            <select
                                 value={form.kategori}
                                 onChange={(e) => setForm({ ...form, kategori: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Kategori</option>
+                                {listKategori.map((item, i) => (
+                                    <option key={i} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

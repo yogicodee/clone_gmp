@@ -125,7 +125,7 @@ export default function Sidebar({ open }: { open: boolean }) {
 
         <SidebarItem
           icon={<LayoutDashboard />}
-          label="Dashboard"
+          label="Overview"
           open={open}
           active={pathname === "/admin"}
           onClick={() => router.push("/admin")}

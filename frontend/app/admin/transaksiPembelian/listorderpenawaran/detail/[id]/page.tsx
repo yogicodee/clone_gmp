@@ -15,7 +15,13 @@ type Item = {
     keterangan: string;
 };
 
-type FormType = Omit<Item, "id">;
+type FormType = {
+    nama_barang: string;
+    qty: string;
+    satuan: string;
+    harga_satuan: string;
+    keterangan: string;
+};
 
 export default function DetailPage() {
     const params = useParams();
@@ -40,11 +46,14 @@ export default function DetailPage() {
         },
     ]);
 
+    const barangList = ["Semen", "Pasir", "Batu", "Besi"];
+    const satuanList = ["KG", "Liter", "Zak"];
+
     const [form, setForm] = useState<FormType>({
         nama_barang: "",
-        qty: 0,
+        qty: "",
         satuan: "",
-        harga_satuan: 0,
+        harga_satuan: "",
         keterangan: "",
     });
 
@@ -52,14 +61,10 @@ export default function DetailPage() {
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
-
-    /* ================= SORT ================= */
     const [sortField, setSortField] = useState<keyof Item>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-    /* ================= PAGINATION ================= */
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
@@ -68,16 +73,24 @@ export default function DetailPage() {
     const handleSubmit = () => {
         if (!form.nama_barang || !form.satuan) return;
 
+        const payload = {
+            nama_barang: form.nama_barang,
+            qty: Number(form.qty),
+            satuan: form.satuan,
+            harga_satuan: Number(form.harga_satuan),
+            keterangan: form.keterangan,
+        };
+
         if (editId) {
             setData((prev) =>
                 prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
+                    item.id === editId ? { ...item, ...payload } : item
                 )
             );
         } else {
             setData((prev) => [
                 ...prev,
-                { id: Date.now(), ...form },
+                { id: Date.now(), ...payload },
             ]);
         }
 
@@ -85,9 +98,14 @@ export default function DetailPage() {
     };
 
     const handleEdit = (item: Item) => {
-        const { id, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
+        setForm({
+            nama_barang: item.nama_barang,
+            qty: String(item.qty),
+            satuan: item.satuan,
+            harga_satuan: String(item.harga_satuan),
+            keterangan: item.keterangan,
+        });
+        setEditId(item.id);
         setOpenForm(true);
     };
 
@@ -101,9 +119,9 @@ export default function DetailPage() {
     const resetForm = () => {
         setForm({
             nama_barang: "",
-            qty: 0,
+            qty: "",
             satuan: "",
-            harga_satuan: 0,
+            harga_satuan: "",
             keterangan: "",
         });
         setEditId(null);
@@ -220,7 +238,7 @@ export default function DetailPage() {
                                 <td className="p-3">{item.qty}</td>
                                 <td className="p-3">{item.satuan}</td>
                                 <td className="p-3">
-                                    Rp {item.harga_satuan.toLocaleString("id-ID")}
+                                    Rp {Number(item.harga_satuan).toLocaleString("id-ID")}
                                 </td>
                                 <td className="p-3">{item.keterangan}</td>
 
@@ -254,41 +272,60 @@ export default function DetailPage() {
                                 {editId ? "Edit Barang" : "Tambah Barang"}
                             </h2>
 
-                            <input
-                                placeholder="Nama Barang"
+                            <select
                                 value={form.nama_barang}
                                 onChange={(e) =>
                                     setForm({ ...form, nama_barang: e.target.value })
                                 }
-                                className="w-full border p-2 rounded-md"
-                            />
+                                className="w-full border p-2 rounded-md bg-white"
+                            >
+                                <option value="">Pilih Nama Barang</option>
+                                {barangList.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
                             <input
                                 type="number"
                                 placeholder="Qty"
                                 value={form.qty}
                                 onChange={(e) =>
-                                    setForm({ ...form, qty: Number(e.target.value) })
+                                    setForm({ ...form, qty: e.target.value })
                                 }
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            <input
-                                placeholder="Satuan"
+                            {/* Pilih Satuan */}
+                            <select
                                 value={form.satuan}
                                 onChange={(e) =>
                                     setForm({ ...form, satuan: e.target.value })
                                 }
-                                className="w-full border p-2 rounded-md"
-                            />
+                                className="w-full border p-2 rounded-md bg-white"
+                            >
+                                <option value="">Pilih Nama Satuan</option>
+                                {satuanList.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
+                            {/* INPUT HARGA AUTO FORMAT */}
                             <input
-                                type="number"
+                                type="text"
                                 placeholder="Harga Satuan"
-                                value={form.harga_satuan}
-                                onChange={(e) =>
-                                    setForm({ ...form, harga_satuan: Number(e.target.value) })
+                                value={
+                                    form.harga_satuan
+                                        ? Number(form.harga_satuan).toLocaleString("id-ID")
+                                        : ""
                                 }
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "");
+                                    setForm({ ...form, harga_satuan: raw });
+                                }}
                                 className="w-full border p-2 rounded-md"
                             />
 

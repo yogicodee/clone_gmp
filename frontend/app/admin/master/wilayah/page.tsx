@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -51,23 +52,21 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!form.nama || !form.alamat) return;
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
-        }
+        try {
+            if (editId) {
+                await api.put(`/wilayah/${editId}`, form);
+            } else {
+                await api.post("/wilayah", form);
+            }
 
-        resetForm();
+            await fetchData(); // refresh data
+            resetForm();
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const handleEdit = (item: Product) => {
@@ -77,10 +76,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/wilayah/${deleteId}`);
+            await fetchData();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -132,6 +136,20 @@ export default function Page() {
         currentPage * perPage
     );
 
+    // API
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        try {
+            const res = await api.get("/wilayah"); // sesuai route kamu
+            setData(res.data.data ?? res.data);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
     // ✅ FIX: reset page saat filter berubah
     useEffect(() => {
         setCurrentPage(1);
@@ -143,6 +161,8 @@ export default function Page() {
             setCurrentPage(1);
         }
     }, [filteredData]);
+
+
 
     return (
         <div className="p-6 space-y-6">

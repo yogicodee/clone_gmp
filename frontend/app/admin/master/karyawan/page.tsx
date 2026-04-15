@@ -246,7 +246,16 @@ export default function Page() {
                                 <td className="p-3">{item.no_hp}</td>
                                 <td className="p-3">{item.jabatan}</td>
                                 <td className="p-3">{item.tanggal_masuk}</td>
-                                <td className="p-3 capitalize">{item.status}</td>
+                                <td className="p-3">
+                                    <span
+                                        className={`px-4 py-2 rounded-md text-primary text-xs capitalize ${item.status === "aktif"
+                                                ? "bg-green-500 text-white"
+                                                : "bg-gray-300"
+                                            }`}
+                                    >
+                                        {item.status}
+                                    </span>
+                                </td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button

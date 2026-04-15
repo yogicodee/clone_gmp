@@ -40,12 +40,16 @@ export default function Page() {
         },
     ]);
 
-    const [form, setForm] = useState<FormType>({
+    const barangList = ["Beras", "Minyak Goreng", "Gula", "Telur"];
+    const satuanList = ["Kg", "Liter", "Pcs", "Dus"];
+    const supplierList = ["PT Sumber Pangan", "CV Makmur Jaya", "PT Sejahtera", "UD Berkah"];
+
+    const [form, setForm] = useState({
         nama_barang: "",
-        qty: 0,
+        qty: "",
         satuan: "",
-        stok: 0,
-        kebutuhan: 0,
+        stok: "",
+        kebutuhan: "",
         nama_supplier: "",
     });
 
@@ -67,25 +71,33 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
-
     const handleSubmit = () => {
         if (!form.nama_barang) return;
+
+        const payload = {
+            ...form,
+            qty: Number(form.qty),
+            stok: Number(form.stok),
+            kebutuhan: Number(form.kebutuhan),
+        };
 
         if (editId) {
             setData((prev) =>
                 prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
+                    item.id === editId ? { ...item, ...payload } : item
                 )
             );
         } else {
             setData((prev) => [
                 ...prev,
-                { id: Date.now(), ...form },
+                { id: Date.now(), ...payload },
             ]);
         }
 
         resetForm();
     };
+
+
 
     const handleEdit = (item: Item) => {
         const { id, ...rest } = item;
@@ -239,27 +251,115 @@ export default function Page() {
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
-                        <div className="bg-white p-6 rounded-lg space-y-3">
-                            <input placeholder="Nama Barang" value={form.nama_barang}
-                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })} />
+                        <motion.div className="bg-white rounded-lg p-6 w-100 max-w-md space-y-4">
 
-                            <input type="number" placeholder="Qty"
-                                onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })} />
+                            {/* NAMA BARANG */}
+                            <select
+                                value={form.nama_barang}
+                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
+                                className="w-full border p-2 rounded-md bg-white"
+                            >
+                                <option value="">Pilih Nama Barang</option>
+                                {barangList.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
-                            <input placeholder="Satuan"
-                                onChange={(e) => setForm({ ...form, satuan: e.target.value })} />
+                            {/* QTY */}
+                            <input
+                                type="text"
+                                placeholder="Qty"
+                                value={
+                                    form.qty
+                                        ? Number(form.qty).toLocaleString("id-ID")
+                                        : ""
+                                }
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "");
+                                    setForm({ ...form, qty: raw });
+                                }}
+                                className="w-full border p-2 rounded-md"
+                            />
 
-                            <input type="number" placeholder="Stok"
-                                onChange={(e) => setForm({ ...form, stok: Number(e.target.value) })} />
+                            {/* SATUAN */}
+                            <select
+                                value={form.satuan}
+                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
+                                className="w-full border p-2 rounded-md bg-white"
+                            >
+                                <option value="">Pilih Satuan</option>
+                                {satuanList.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
-                            <input type="number" placeholder="Kebutuhan"
-                                onChange={(e) => setForm({ ...form, kebutuhan: Number(e.target.value) })} />
+                            {/* STOK */}
+                            <input
+                                type="text"
+                                placeholder="Stok"
+                                value={
+                                    form.stok
+                                        ? Number(form.stok).toLocaleString("id-ID")
+                                        : ""
+                                }
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "");
+                                    setForm({ ...form, stok: raw });
+                                }}
+                                className="w-full border p-2 rounded-md"
+                            />
 
-                            <input placeholder="Supplier"
-                                onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })} />
+                            {/* KEBUTUHAN */}
+                            <input
+                                type="text"
+                                placeholder="Kebutuhan"
+                                value={
+                                    form.kebutuhan
+                                        ? Number(form.kebutuhan).toLocaleString("id-ID")
+                                        : ""
+                                }
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "");
+                                    setForm({ ...form, kebutuhan: raw });
+                                }}
+                                className="w-full border p-2 rounded-md"
+                            />
 
-                            <button onClick={handleSubmit}>Simpan</button>
-                        </div>
+                            {/* SUPPLIER */}
+                            <select
+                                value={form.nama_supplier}
+                                onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
+                                className="w-full border p-2 rounded-md bg-white"
+                            >
+                                <option value="">Pilih Supplier</option>
+                                {supplierList.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* ACTION */}
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={resetForm}
+                                    className="px-3 py-1 bg-gray-200 rounded-md"
+                                >
+                                    Batal
+                                </button>
+
+                                <button
+                                    onClick={handleSubmit}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded-md"
+                                >
+                                    Simpan
+                                </button>
+                            </div>
+                        </motion.div>
                     </Modal>
                 )}
             </AnimatePresence>
