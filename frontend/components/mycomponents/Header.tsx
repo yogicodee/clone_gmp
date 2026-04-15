@@ -49,7 +49,7 @@ export default function Header({ onToggle }: { onToggle: () => void }) {
   };
 
   return (
-    <header className="h-16 bg-white shadow flex items-center justify-between px-6">
+    <header className="h-16 bg-white shadow-lg flex items-center justify-between px-6">
 
       {/* LEFT */}
       <div className="flex items-center gap-3">

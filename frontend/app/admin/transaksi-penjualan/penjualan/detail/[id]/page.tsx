@@ -5,6 +5,19 @@ import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 
+/* ================= HELPER ================= */
+const formatRupiah = (value: number | string) => {
+    const number = Number(value || 0);
+    return new Intl.NumberFormat("id-ID").format(number);
+};
+
+/* ================= DATA BARANG (SIMULASI API) ================= */
+const barangList = [
+    { nama: "Beras", harga: 12000 },
+    { nama: "Minyak Goreng", harga: 15000 },
+    { nama: "Gula", harga: 14000 },
+];
+
 /* ================= TYPE ================= */
 type Item = {
     id: number;
@@ -34,15 +47,16 @@ export default function Page() {
         },
     ]);
 
-    const [form, setForm] = useState<FormType>({
+    const [form, setForm] = useState<any>({
         nama_barang: "",
-        qty: 0,
-        harga_satuan: 0,
+        qty: "",
+        harga_satuan: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
     const router = useRouter();
     const params = useParams();
 
@@ -100,8 +114,8 @@ export default function Page() {
     const resetForm = () => {
         setForm({
             nama_barang: "",
-            qty: 0,
-            harga_satuan: 0,
+            qty: "",
+            harga_satuan: "",
         });
         setEditId(null);
         setOpenForm(false);
@@ -177,7 +191,7 @@ export default function Page() {
 
                 <button
                     onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary text-white px-4 py-2 rounded-lg"
                 >
                     <Plus size={16} />
                     Tambah Data
@@ -190,10 +204,10 @@ export default function Page() {
                     <thead className="bg-gray-100">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3 text-left" onClick={() => handleSort("nama_barang")}>Barang</th>
+                            <th className="p-3 text-left">Barang</th>
                             <th className="p-3 text-left">Qty</th>
-                            <th className="p-3 text-left" onClick={() => handleSort("harga_satuan")}>Harga Satuan</th>
-                            <th className="p-3 text-left" onClick={() => handleSort("total")}>Total</th>
+                            <th className="p-3 text-left">Harga</th>
+                            <th className="p-3 text-left">Total</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -204,15 +218,25 @@ export default function Page() {
                                 <td className="p-3 text-center">{index + 1}</td>
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.qty}</td>
-                                <td className="p-3">{item.harga_satuan}</td>
-                                <td className="p-3">{item.total}</td>
+                                <td className="p-3">
+                                    Rp {formatRupiah(item.harga_satuan)}
+                                </td>
+                                <td className="p-3">
+                                    Rp {formatRupiah(item.total)}
+                                </td>
 
                                 <td className="p-3 flex justify-center gap-2">
-                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 rounded">
+                                    <button
+                                        onClick={() => handleEdit(item)}
+                                        className="p-2 bg-blue-500/30 rounded"
+                                    >
                                         <Pencil size={14} />
                                     </button>
 
-                                    <button onClick={() => setDeleteId(item.id)} className="p-2 bg-red-500/30 rounded">
+                                    <button
+                                        onClick={() => setDeleteId(item.id)}
+                                        className="p-2 bg-red-500/30 rounded"
+                                    >
                                         <Trash2 size={14} />
                                     </button>
                                 </td>
@@ -222,37 +246,7 @@ export default function Page() {
                 </table>
             </div>
 
-            {/* PAGINATION */}
-            <div className="flex justify-end gap-2">
-                <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 border rounded-md"
-                >
-                    Prev
-                </button>
-
-                {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                        key={i}
-                        onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
-                    >
-                        {i + 1}
-                    </button>
-                ))}
-
-                <button
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 border rounded-md"
-                >
-                    Next
-                </button>
-            </div>
-
-            {/* FORM (TIDAK DIUBAH STYLE) */}
+            {/* FORM */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
@@ -261,34 +255,68 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            <input
-                                placeholder="Nama Barang"
+                            {/* SELECT BARANG */}
+                            <select
                                 value={form.nama_barang}
-                                onChange={(e) =>
-                                    setForm({ ...form, nama_barang: e.target.value })
-                                }
+                                onChange={(e) => {
+                                    const selected = barangList.find(
+                                        (b) => b.nama === e.target.value
+                                    );
+
+                                    setForm({
+                                        ...form,
+                                        nama_barang: e.target.value,
+                                        harga_satuan: selected?.harga || 0,
+                                    });
+                                }}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Barang</option>
+                                {barangList.map((b, i) => (
+                                    <option key={i} value={b.nama}>
+                                        {b.nama}
+                                    </option>
+                                ))}
+                            </select>
 
                             <input
                                 type="number"
-                                placeholder="Qty"
+                                placeholder="Masukkan Qty"
                                 value={form.qty}
                                 onChange={(e) =>
-                                    setForm({ ...form, qty: Number(e.target.value) })
+                                    setForm({
+                                        ...form,
+                                        qty: e.target.value === "" ? "" : Number(e.target.value),
+                                    })
                                 }
                                 className="w-full border p-2 rounded-md"
                             />
 
                             <input
-                                type="number"
-                                placeholder="Harga Satuan"
-                                value={form.harga_satuan}
-                                onChange={(e) =>
-                                    setForm({ ...form, harga_satuan: Number(e.target.value) })
+                                placeholder="Masukkan Harga"
+                                value={
+                                    form.harga_satuan
+                                        ? formatRupiah(form.harga_satuan)
+                                        : ""
                                 }
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "");
+                                    setForm({
+                                        ...form,
+                                        harga_satuan: raw === "" ? "" : Number(raw),
+                                    });
+                                }}
                                 className="w-full border p-2 rounded-md"
                             />
+
+                            {/* TOTAL REALTIME */}
+                            <div className="text-right font-semibold">
+                                Total: Rp{" "}
+                                {formatRupiah(
+                                    (Number(form.qty) || 0) *
+                                    (Number(form.harga_satuan) || 0)
+                                )}
+                            </div>
 
                             <div className="flex justify-end gap-2">
                                 <button
@@ -310,7 +338,7 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* MODAL DELETE tetap */}
+            {/* DELETE */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
@@ -342,7 +370,7 @@ export default function Page() {
     );
 }
 
-/* MODAL tetap */
+/* MODAL */
 function Modal({
     children,
     onClose,

@@ -146,19 +146,13 @@ export default function Page() {
                     className="border p-2 rounded-md bg-white shadow"
                 />
 
-                <button
-                    onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
-                >
-                    <Plus size={16} />
-                    Tambah Data
-                </button>
+                
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-lg shadow overflow-auto">
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
                             <th className="p-3">
@@ -175,7 +169,7 @@ export default function Page() {
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t">
+                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>

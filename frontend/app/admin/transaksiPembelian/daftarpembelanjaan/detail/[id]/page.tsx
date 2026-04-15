@@ -98,6 +98,7 @@ export default function Page() {
     };
 
 
+    const isEdit = !!editId;
 
     const handleEdit = (item: Item) => {
         const { id, ...rest } = item;
@@ -182,7 +183,7 @@ export default function Page() {
 
                 <button
                     onClick={() => router.back()}
-                    className="px-4 py-2 bg-gray-200 rounded-md"
+                    className="px-4 py-2 bg-white rounded-md"
                 >
                     Kembali
                 </button>
@@ -193,22 +194,16 @@ export default function Page() {
                     placeholder="Cari barang / supplier..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="border p-2 rounded-md w-1/4"
+                    className="border p-2 rounded-md w-1/4 bg-white"
                 />
 
-                <button
-                    onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
-                >
-                    <Plus size={16} />
-                    Tambah Data
-                </button>
+
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-lg shadow overflow-auto">
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
                             <th className="p-3 text-left" onClick={() => handleSort("nama_barang")}>Barang</th>
@@ -223,7 +218,7 @@ export default function Page() {
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t">
+                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">{index + 1}</td>
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.qty}</td>
@@ -237,9 +232,7 @@ export default function Page() {
                                         <Pencil size={14} />
                                     </button>
 
-                                    <button onClick={() => setDeleteId(item.id)} className="p-2 bg-red-500/30 rounded">
-                                        <Trash2 size={14} />
-                                    </button>
+
                                 </td>
                             </tr>
                         ))}
@@ -255,6 +248,7 @@ export default function Page() {
 
                             {/* NAMA BARANG */}
                             <select
+                                disabled={isEdit}
                                 value={form.nama_barang}
                                 onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
                                 className="w-full border p-2 rounded-md bg-white"
@@ -269,6 +263,7 @@ export default function Page() {
 
                             {/* QTY */}
                             <input
+                                disabled={isEdit}
                                 type="text"
                                 placeholder="Qty"
                                 value={
@@ -285,6 +280,7 @@ export default function Page() {
 
                             {/* SATUAN */}
                             <select
+                                disabled={isEdit}
                                 value={form.satuan}
                                 onChange={(e) => setForm({ ...form, satuan: e.target.value })}
                                 className="w-full border p-2 rounded-md bg-white"
@@ -299,6 +295,7 @@ export default function Page() {
 
                             {/* STOK */}
                             <input
+                                disabled={isEdit}
                                 type="text"
                                 placeholder="Stok"
                                 value={
@@ -315,6 +312,7 @@ export default function Page() {
 
                             {/* KEBUTUHAN */}
                             <input
+                                disabled={isEdit}
                                 type="text"
                                 placeholder="Kebutuhan"
                                 value={

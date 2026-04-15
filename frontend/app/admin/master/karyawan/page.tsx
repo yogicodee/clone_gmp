@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowUpDown, Circle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /* ================= TYPE ================= */
@@ -193,9 +193,9 @@ export default function Page() {
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-lg shadow overflow-auto">
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
 
@@ -237,7 +237,7 @@ export default function Page() {
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t">
+                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
@@ -248,11 +248,16 @@ export default function Page() {
                                 <td className="p-3">{item.tanggal_masuk}</td>
                                 <td className="p-3">
                                     <span
-                                        className={`px-4 py-2 rounded-md text-primary text-xs capitalize ${item.status === "aktif"
-                                                ? "bg-green-500 text-white"
-                                                : "bg-gray-300"
+                                        className={`inline-flex items-center gap-2 min-w-[90px] justify-center px-4 py-2 rounded-md text-xs capitalize
+                                                ${item.status === "aktif"
+                                                ? "bg-lime-500/50 text-white"
+                                                : "bg-black/70 text-white backdrop-blur-xl"
                                             }`}
                                     >
+                                        <Circle
+                                            size={6}
+                                            className={`${item.status === "aktif" ? "fill-white" : "fill-white opacity-70"}`}
+                                        />
                                         {item.status}
                                     </span>
                                 </td>

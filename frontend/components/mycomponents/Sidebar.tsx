@@ -89,11 +89,9 @@ const menus = [
     icon: <BarChart3 />,
     key: "laporandananalisa",
     children: [
-      { icon: <Boxes size={16} />, label: "Stok Barang", path: "/admin/laporan/stok" },
-      { icon: <TrendingUp size={16} />, label: "Penjualan Per SPPG", path: "/admin/laporan/penjualan" },
-      { icon: <Truck size={16} />, label: "Kinerja Logistik", path: "/admin/laporan/logistik" },
-      { icon: <FileText size={16} />, label: "Laba Rugi Transaksional", path: "/admin/laporan/labarugi" },
-      { icon: <PackageSearch size={16} />, label: "Analisa Kebutuhan Stok", path: "/admin/laporan/analisa" },
+      { icon: <Boxes size={16} />, label: "Laporan Stok Barang", path: "/admin/laporan/laporan-stok-barang" },
+      { icon: <TrendingUp size={16} />, label: "Penjualan Per SPPG", path: "/admin/laporan/laporan-penjualan" },
+      { icon: <FileText size={16} />, label: "Laba Rugi Transaksional", path: "/admin/laporan/laporan-laba-rugi" },
     ],
   },
 ];
@@ -112,7 +110,7 @@ export default function Sidebar({ open }: { open: boolean }) {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen text-gray-200 bg-linear-to-br from-primary to-red-950 shadow-md border-r transition-all duration-300 flex flex-col
+      className={`fixed top-0 left-0 h-screen text-gray-200 bg-primary/50 backdrop-blur-lg border-r transition-all duration-300 flex flex-col
       ${open ? "w-64" : "w-20"}`}
     >
       {/* HEADER */}

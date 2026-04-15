@@ -16,6 +16,11 @@ type Order = {
 
 type FormType = Omit<Order, "id">;
 
+const formatRupiah = (value: string | number) => {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat("id-ID").format(number);
+};
+
 export default function Page() {
   const router = useRouter();
 
@@ -222,7 +227,7 @@ export default function Page() {
                 </td>
                 <td className="p-3">{item.kode_penjualan}</td>
                 <td className="p-3">{item.tanggal}</td>
-                <td className="p-3">{item.total_harga}</td>
+                <td className="p-3">Rp {formatRupiah(item.total_harga)}</td>
                 <td className="p-3 capitalize">{item.status}</td>
 
                 <td className="p-3 flex justify-center gap-2">
@@ -312,10 +317,11 @@ export default function Page() {
 
               <input
                 placeholder="Total Harga"
-                value={form.total_harga}
-                onChange={(e) =>
-                  setForm({ ...form, total_harga: e.target.value })
-                }
+                value={formatRupiah(form.total_harga)}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, ""); // ambil angka saja
+                  setForm({ ...form, total_harga: raw });
+                }}
                 className="w-full border p-2 rounded-md"
               />
 

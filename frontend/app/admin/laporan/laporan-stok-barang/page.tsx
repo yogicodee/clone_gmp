@@ -16,8 +16,8 @@ type FormType = Omit<Product, "id">;
 
 export default function Page() {
     const [data, setData] = useState<Product[]>([
-        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Roda 4" },
-        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Roda 4" },
+        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Truck" },
+        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Pickup" },
     ]);
 
     const [listJenisKendaraan, setListJenisKendaraan] = useState([
@@ -143,7 +143,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Armada</h1>
+                <h1 className="text-xl font-bold">Laporan Stok Barang</h1>
             </div>
 
             <div className="flex items-center justify-between">
@@ -164,9 +164,9 @@ export default function Page() {
             </div>
 
             {/* TABLE */}
-            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
+            <div className="bg-white rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-white shadow-lg">
+                    <thead className="bg-gray-100">
                         <tr>
                             <th className="p-3">No</th>
 
@@ -194,7 +194,7 @@ export default function Page() {
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
+                            <tr key={item.id} className="border-t">
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
