@@ -129,7 +129,7 @@ export default function Page() {
         if (currentPage > totalPages) {
             setCurrentPage(1);
         }
-    }, [filteredData]);
+    }, [currentPage, totalPages]);
 
     return (
         <div className="p-6 space-y-6">
@@ -191,7 +191,7 @@ export default function Page() {
                                         <Eye size={14} />
                                     </button>
 
-                                    
+
                                 </td>
                             </tr>
                         ))}

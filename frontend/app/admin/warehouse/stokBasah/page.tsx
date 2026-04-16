@@ -157,20 +157,12 @@ export default function Page() {
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
-
-                <button
-                    onClick={() => setOpenForm(true)}
-                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
-                >
-                    <Plus size={16} />
-                    Tambah Data
-                </button>
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-lg shadow overflow-auto">
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
 
@@ -183,14 +175,12 @@ export default function Page() {
                             <th className="p-3 text-left">Qty</th>
                             <th className="p-3 text-left">Satuan</th>
                             <th className="p-3 text-left">Harga Beli</th>
-
-                            <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t">
+                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
@@ -198,22 +188,8 @@ export default function Page() {
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.qty}</td>
                                 <td className="p-3">{item.satuan_terkecil}</td>
-                                <td className="p-3">{item.harga_beli}</td>
-
-                                <td className="p-3 flex justify-center gap-2">
-                                    <button
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                <td className="p-3">
+                                    Rp {Number(item.harga_beli).toLocaleString("id-ID")}
                                 </td>
                             </tr>
                         ))}
@@ -226,7 +202,7 @@ export default function Page() {
                 <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 border rounded-md"
+                    className="px-3 py-1 border border-white rounded-md"
                 >
                     Prev
                 </button>
@@ -235,7 +211,7 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border border-white rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
@@ -244,105 +220,12 @@ export default function Page() {
                 <button
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 border rounded-md"
+                    className="px-3 py-1 border border-white rounded-md"
                 >
                     Next
                 </button>
             </div>
 
-            {/* FORM MODAL */}
-            <AnimatePresence>
-                {openForm && (
-                    <Modal onClose={resetForm}>
-                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                {editId ? "Edit Data" : "Tambah Data"}
-                            </h2>
-
-                            <input
-                                placeholder="Nama Barang"
-                                value={form.nama_barang}
-                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                type="number"
-                                placeholder="Qty"
-                                value={form.qty}
-                                onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                placeholder="Satuan Terkecil"
-                                value={form.satuan_terkecil}
-                                onChange={(e) => setForm({ ...form, satuan_terkecil: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                type="number"
-                                placeholder="Harga Beli"
-                                value={form.harga_beli}
-                                onChange={(e) => setForm({ ...form, harga_beli: Number(e.target.value) })}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <div className="flex justify-end gap-2">
-                                <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
-                                    Batal
-                                </button>
-
-                                <button onClick={handleSubmit} className="px-4 py-2 bg-blue-700 text-white rounded-md">
-                                    Simpan
-                                </button>
-                            </div>
-                        </motion.div>
-                    </Modal>
-                )}
-            </AnimatePresence>
-
-            {/* DELETE MODAL */}
-            <AnimatePresence>
-                {deleteId && (
-                    <Modal onClose={() => setDeleteId(null)}>
-                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
-
-                            <div className="flex justify-center gap-2">
-                                <button
-                                    onClick={() => setDeleteId(null)}
-                                    className="px-4 py-2 bg-gray-200 rounded-md"
-                                >
-                                    Batal
-                                </button>
-
-                                <button
-                                    onClick={handleDelete}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md"
-                                >
-                                    Hapus
-                                </button>
-                            </div>
-                        </motion.div>
-                    </Modal>
-                )}
-            </AnimatePresence>
         </div>
-    );
-}
-
-/* ================= MODAL ================= */
-function Modal({ children, onClose }: any) {
-    return (
-        <motion.div
-            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-            onClick={onClose}
-        >
-            <div onClick={(e) => e.stopPropagation()}>
-                {children}
-            </div>
-        </motion.div>
     );
 }

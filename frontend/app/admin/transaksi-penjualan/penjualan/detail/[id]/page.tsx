@@ -175,7 +175,7 @@ export default function Page() {
 
                 <button
                     onClick={() => router.back()}
-                    className="px-4 py-2 bg-gray-200 rounded-md"
+                    className="px-4 py-2 bg-white rounded-md"
                 >
                     Kembali
                 </button>
@@ -186,7 +186,7 @@ export default function Page() {
                     placeholder="Cari barang..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="border p-2 rounded-md w-1/4"
+                    className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button
@@ -199,9 +199,9 @@ export default function Page() {
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-lg shadow overflow-auto">
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
                             <th className="p-3 text-left">Barang</th>
@@ -214,7 +214,7 @@ export default function Page() {
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t">
+                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">{index + 1}</td>
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.qty}</td>
@@ -228,14 +228,14 @@ export default function Page() {
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
                                         onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 rounded"
+                                        className="p-2 bg-blue-500/30 text-blue-700 rounded"
                                     >
                                         <Pencil size={14} />
                                     </button>
 
                                     <button
                                         onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 rounded"
+                                        className="p-2 bg-red-500/30 text-red-700 rounded"
                                     >
                                         <Trash2 size={14} />
                                     </button>

@@ -190,9 +190,9 @@ export default function Page() {
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-lg shadow overflow-auto">
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
                             <th className="p-3">
@@ -212,7 +212,7 @@ export default function Page() {
 
                     <tbody>
                         {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t">
+                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
@@ -224,11 +224,11 @@ export default function Page() {
                                 <td className="p-3">Rp {formatRupiah(item.total_harga)}</td>
                                 <td className="p-3">{item.nama_supplier}</td>
 
-                                <td className="p-3 flex justify-center gap-2">
-                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 rounded-md">
+                                <td className="p-3  flex justify-center gap-2">
+                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 bg-blue-500/30 text-blue-700 rounded-md">
                                         <Pencil size={14} />
                                     </button>
-                                    <button onClick={() => setDeleteId(item.id)} className="p-2 bg-red-500/30 rounded-md">
+                                    <button onClick={() => setDeleteId(item.id)} className="p-2 bg-red-500/30 text-red-700 rounded-md">
                                         <Trash2 size={14} />
                                     </button>
                                 </td>
@@ -243,7 +243,7 @@ export default function Page() {
                 <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 border rounded-md"
+                    className="px-3 py-1 border border-white rounded-md"
                 >
                     Prev
                 </button>
@@ -252,7 +252,7 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
+                        className={`px-3 py-1 border border-white rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
                             }`}
                     >
                         {i + 1}
@@ -262,7 +262,7 @@ export default function Page() {
                 <button
                     disabled={currentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 border rounded-md"
+                    className="px-3 py-1 border border-white rounded-md"
                 >
                     Next
                 </button>

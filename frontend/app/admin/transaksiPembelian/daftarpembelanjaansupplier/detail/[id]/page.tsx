@@ -132,18 +132,14 @@ export default function Page() {
 
                 <button
                     onClick={() => router.back()}
-                    className="px-4 py-2 bg-gray-200 rounded-md"
+                    className="px-4 py-2 bg-white rounded-md"
                 >
                     Kembali
                 </button>
             </div>
 
             {/* TITLE + EXPORT */}
-            <div className="flex justify-between items-center mb-3">
-                <h2 className="font-semibold">
-                    Detail Barang ({selectedSupplier})
-                </h2>
-
+            <div className="flex justify-end items-center mb-3">
                 <button
                     onClick={handleExportPDF}
                     className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
@@ -156,7 +152,7 @@ export default function Page() {
             <div className="grid grid-cols-3 gap-4">
 
                 {/* LEFT */}
-                <div className="col-span-1 bg-white rounded-lg shadow p-4">
+                <div className="col-span-1 bg-white/70 backdrop-blur-lg rounded-lg shadow p-4">
                     <h2 className="font-semibold mb-3">Supplier</h2>
 
                     <div className="space-y-2">
@@ -167,8 +163,8 @@ export default function Page() {
                                     setSelectedSupplier(sup.nama_supplier)
                                 }
                                 className={`p-3 rounded-md cursor-pointer border ${selectedSupplier === sup.nama_supplier
-                                        ? "bg-blue-100 border-blue-400"
-                                        : "hover:bg-gray-100"
+                                    ? "bg-lime-200/70 border-white"
+                                    : "hover:bg-gray-200"
                                     }`}
                             >
                                 <p className="font-medium">
@@ -180,13 +176,13 @@ export default function Page() {
                 </div>
 
                 {/* RIGHT */}
-                <div className="col-span-2 bg-white rounded-lg shadow p-4">
+                <div className="col-span-2 bg-white/70 backdrop-blur-lg rounded-lg shadow p-4">
                     <h2 className="font-semibold mb-3">
                         Detail Barang ({selectedSupplier})
                     </h2>
 
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-100">
+                        <thead className="bg-white shadow-lg sticky top-0">
                             <tr>
                                 <th className="p-2">No</th>
                                 <th className="p-2 text-left">Barang</th>
@@ -220,7 +216,7 @@ export default function Page() {
                                         {item.kebutuhan}
                                     </td>
                                     <td className="p-2 text-center">
-                                        
+
                                     </td>
                                 </tr>
                             ))}
@@ -238,6 +234,8 @@ export default function Page() {
                         </tbody>
                     </table>
                 </div>
+
+
             </div>
         </div>
     );
