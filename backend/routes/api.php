@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ArmadaController;
 use App\Http\Controllers\Api\BankRekeningController;
 use App\Http\Controllers\Api\DaftarPembelanjaanController;
 use App\Http\Controllers\Api\DaftarPembelanjaanItemController;
+use App\Http\Controllers\Api\DaftarPembelanjaanSupplierController;
 use App\Http\Controllers\Api\GudangController;
 use App\Http\Controllers\Api\KaryawanController;
 use App\Http\Controllers\Api\KategoriController;
@@ -57,3 +58,5 @@ Route::post('daftar-pembelanjaan/{daftarPembelanjaan}/items', [DaftarPembelanjaa
 Route::get('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'show']);
 Route::put('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'update']);
 Route::delete('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'destroy']);
+Route::get('daftar-pembelanjaan-supplier', [DaftarPembelanjaanSupplierController::class, 'index']);
+Route::get('daftar-pembelanjaan-supplier/{orderPenawaran}', [DaftarPembelanjaanSupplierController::class, 'show']);
