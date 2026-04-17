@@ -48,6 +48,14 @@ export default function Page() {
         status: "aktif",
     });
 
+    const [listJabatan, setListJabatan] = useState([
+        "Direktur",
+        "Manager",
+        "Admin",
+        "Accounting",
+        "Warehouse",
+    ]);
+
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -325,7 +333,18 @@ export default function Page() {
                             <input placeholder="Nama" value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} className="w-full border p-2 rounded-md" />
                             <input placeholder="Alamat" value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="w-full border p-2 rounded-md" />
                             <input placeholder="No HP" value={form.no_hp} onChange={(e) => setForm({ ...form, no_hp: e.target.value })} className="w-full border p-2 rounded-md" />
-                            <input placeholder="Jabatan" value={form.jabatan} onChange={(e) => setForm({ ...form, jabatan: e.target.value })} className="w-full border p-2 rounded-md" />
+                            <select
+                                value={form.jabatan}
+                                onChange={(e) => setForm({ ...form, jabatan: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            >
+                                <option value="">Pilih Jabatan</option>
+                                {listJabatan.map((item, i) => (
+                                    <option key={i} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
 
                             <input type="date" value={form.tanggal_masuk} onChange={(e) => setForm({ ...form, tanggal_masuk: e.target.value })} className="w-full border p-2 rounded-md" />
 

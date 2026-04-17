@@ -26,7 +26,7 @@ export default function Page() {
             qty: 10,
             satuan: "Kg",
             stok: 5,
-            kebutuhan: 15,
+            kebutuhan: 5,
             nama_supplier: "PT Sumber Pangan",
         },
         {
@@ -35,7 +35,7 @@ export default function Page() {
             qty: 20,
             satuan: "Liter",
             stok: 10,
-            kebutuhan: 25,
+            kebutuhan: 10,
             nama_supplier: "CV Makmur Jaya",
         },
     ]);
@@ -74,11 +74,15 @@ export default function Page() {
     const handleSubmit = () => {
         if (!form.nama_barang) return;
 
+        const qty = Number(form.qty);
+        const stok = Number(form.stok);
+        const kebutuhan = Math.max(qty - stok, 0);
+
         const payload = {
             ...form,
-            qty: Number(form.qty),
-            stok: Number(form.stok),
-            kebutuhan: Number(form.kebutuhan),
+            qty,
+            stok,
+            kebutuhan,
         };
 
         if (editId) {
@@ -340,22 +344,6 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            {/* KEBUTUHAN */}
-                            <input
-                                disabled={isEdit}
-                                type="text"
-                                placeholder="Kebutuhan"
-                                value={
-                                    form.kebutuhan
-                                        ? Number(form.kebutuhan).toLocaleString("id-ID")
-                                        : ""
-                                }
-                                onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
-                                    setForm({ ...form, kebutuhan: raw });
-                                }}
-                                className="w-full border p-2 rounded-md"
-                            />
 
                             {/* SUPPLIER */}
                             <select

@@ -44,6 +44,13 @@ export default function Page() {
         },
     ]);
 
+    const [listYayasan, setListYayasan] = useState([
+        "Yayasan 1",
+        "Yayasan 2",
+        "Yayasan 3",
+        "Yayasan 4",
+    ]);
+
     const [form, setForm] = useState<FormType>({
         nama_sppg: "",
         alamat: "",
@@ -322,12 +329,19 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            <input
-                                placeholder="Yayasan"
+                            <select
                                 value={form.nama_yayasan}
                                 onChange={(e) => setForm({ ...form, nama_yayasan: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Nama Yayasan</option>
+                                {listYayasan.map((item, i) => (
+                                    <option key={i} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
+
 
                             <input
                                 placeholder="Nama Penanggungjawab"

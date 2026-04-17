@@ -24,14 +24,14 @@ export default function Page() {
             id: 1,
             tanggal_pesan: "2026-04-01",
             tanggal_dikirim: "2026-04-03",
-            nama_pembeli: "Budi",
+            nama_pembeli: "SPPG Nganjuk",
             keterangan: "Order cepat",
         },
         {
             id: 2,
             tanggal_pesan: "2026-04-02",
             tanggal_dikirim: "2026-04-05",
-            nama_pembeli: "Siti",
+            nama_pembeli: "SPPG Surabaya",
             keterangan: "Prioritas tinggi",
         },
     ]);
@@ -309,14 +309,15 @@ export default function Page() {
                             />
 
                             <h1 className="mb-2">Nama Pembeli</h1>
-                            <input
-                                placeholder="Nama Pembeli"
+                            <select
                                 value={form.nama_pembeli}
-                                onChange={(e) =>
-                                    setForm({ ...form, nama_pembeli: e.target.value })
-                                }
+                                onChange={(e) => setForm({ ...form, nama_pembeli: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Nama Pembeli</option>
+                                <option value="SPPG Ceweng">SPPG Ceweng</option>
+                                <option value="SPPG Candi">SPPG Candi</option>
+                            </select>
 
                             <h1 className="mb-2">Keterangan</h1>
                             <input

@@ -263,6 +263,36 @@ export default function DetailPage() {
                 </table>
             </div>
 
+            {/* PAGINATION */}
+            <div className="flex justify-end gap-2">
+                <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    className="px-3 py-1 border rounded-md"
+                >
+                    Prev
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
+                            }`}
+                    >
+                        {i + 1}
+                    </button>
+                ))}
+
+                <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    className="px-3 py-1 border rounded-md"
+                >
+                    Next
+                </button>
+            </div>
+
             {/* FORM MODAL */}
             <AnimatePresence>
                 {openForm && (

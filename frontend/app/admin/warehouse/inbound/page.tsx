@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 type Product = {
     id: number;
     nama_barang: string;
+    kategori: string;
     tanggal_masuk: string;
     qty: number;
     satuan: string;
@@ -23,6 +24,7 @@ export default function Page() {
         {
             id: 1,
             nama_barang: "Beras",
+            kategori: "Kering",
             tanggal_masuk: "2026-04-01",
             qty: 10,
             satuan: "Kg",
@@ -34,6 +36,7 @@ export default function Page() {
 
     const [form, setForm] = useState<FormType>({
         nama_barang: "",
+        kategori: "",
         tanggal_masuk: "",
         qty: 0,
         satuan: "",
@@ -42,6 +45,8 @@ export default function Page() {
     });
 
     const [hargaInput, setHargaInput] = useState("");
+    const [qtyInput, setQtyInput] = useState("");
+
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -53,7 +58,6 @@ export default function Page() {
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    /* ================= HELPER ================= */
     const formatRupiah = (value: number | string) => {
         const number = Number(value) || 0;
         return number.toLocaleString("id-ID");
@@ -91,6 +95,7 @@ export default function Page() {
         const { id, total_harga, ...rest } = item;
         setForm(rest);
         setHargaInput(formatRupiah(rest.harga_satuan));
+        setQtyInput(String(rest.qty));
         setEditId(id);
         setOpenForm(true);
     };
@@ -105,6 +110,7 @@ export default function Page() {
     const resetForm = () => {
         setForm({
             nama_barang: "",
+            kategori: "",
             tanggal_masuk: "",
             qty: 0,
             satuan: "",
@@ -112,6 +118,7 @@ export default function Page() {
             nama_supplier: "",
         });
         setHargaInput("");
+        setQtyInput("");
         setEditId(null);
         setOpenForm(false);
     };
@@ -125,7 +132,7 @@ export default function Page() {
         }
     };
 
-    /* ================= FILTER + SORT ================= */
+    /* ================= FILTER ================= */
     const filteredData = useMemo(() => {
         let result = [...data];
 
@@ -141,8 +148,9 @@ export default function Page() {
             const aVal = String(a[sortField]).toLowerCase();
             const bVal = String(b[sortField]).toLowerCase();
 
-            if (sortOrder === "asc") return aVal.localeCompare(bVal);
-            return bVal.localeCompare(aVal);
+            return sortOrder === "asc"
+                ? aVal.localeCompare(bVal)
+                : bVal.localeCompare(aVal);
         });
 
         return result;
@@ -156,15 +164,13 @@ export default function Page() {
         currentPage * perPage
     );
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
+    useEffect(() => setCurrentPage(1), [search]);
 
     useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
+        if (currentPage > totalPages) setCurrentPage(1);
     }, [filteredData]);
+
+    const [btnPos, setBtnPos] = useState({ x: 0, y: 0 });
 
     return (
         <div className="p-6 space-y-6">
@@ -195,11 +201,8 @@ export default function Page() {
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3">
-                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
-                                    Nama Barang <ArrowUpDown size={14} />
-                                </button>
-                            </th>
+                            <th className="p-3 text-left">Nama Barang</th>
+                            <th className="p-3 text-left">Kategori</th>
                             <th className="p-3 text-left">Tanggal</th>
                             <th className="p-3 text-left">Qty</th>
                             <th className="p-3 text-left">Satuan</th>
@@ -217,6 +220,7 @@ export default function Page() {
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
                                 <td className="p-3">{item.nama_barang}</td>
+                                <td className="p-3">{item.kategori}</td>
                                 <td className="p-3">{item.tanggal_masuk}</td>
                                 <td className="p-3">{item.qty}</td>
                                 <td className="p-3">{item.satuan}</td>
@@ -224,8 +228,8 @@ export default function Page() {
                                 <td className="p-3">Rp {formatRupiah(item.total_harga)}</td>
                                 <td className="p-3">{item.nama_supplier}</td>
 
-                                <td className="p-3  flex justify-center gap-2">
-                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 bg-blue-500/30 text-blue-700 rounded-md">
+                                <td className="p-3 flex justify-center gap-2">
+                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 text-blue-700 rounded-md">
                                         <Pencil size={14} />
                                     </button>
                                     <button onClick={() => setDeleteId(item.id)} className="p-2 bg-red-500/30 text-red-700 rounded-md">
@@ -277,12 +281,27 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            <input
-                                placeholder="Nama Barang"
+                            {/* NAMA BARANG SELECT */}
+                            <select
                                 value={form.nama_barang}
                                 onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Barang</option>
+                                <option value="Beras">Beras</option>
+                                <option value="Minyak">Minyak</option>
+                                <option value="Gula">Gula</option>
+                            </select>
+
+                            <select
+                                value={form.kategori}
+                                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            >
+                                <option value="">Pilih Kategori</option>
+                                <option value="Basah">Basah</option>
+                                <option value="Kering">Kering</option>
+                            </select>
 
                             <input
                                 type="date"
@@ -292,14 +311,16 @@ export default function Page() {
                             />
 
                             <input
-                                type="number"
                                 placeholder="Qty"
-                                value={form.qty}
-                                onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })}
+                                value={qtyInput}
+                                onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, "");
+                                    setQtyInput(val);
+                                    setForm({ ...form, qty: Number(val) });
+                                }}
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            {/* SATUAN */}
                             <select
                                 value={form.satuan}
                                 onChange={(e) => setForm({ ...form, satuan: e.target.value })}
@@ -313,7 +334,6 @@ export default function Page() {
                                 <option value="Box">Box</option>
                             </select>
 
-                            {/* HARGA */}
                             <input
                                 placeholder="Harga Satuan"
                                 value={hargaInput}
@@ -325,7 +345,6 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
-                            {/* SUPPLIER */}
                             <select
                                 value={form.nama_supplier}
                                 onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
@@ -350,7 +369,7 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE */}
+            {/* DELETE MODAL */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
