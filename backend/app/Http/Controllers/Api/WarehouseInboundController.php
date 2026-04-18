@@ -14,7 +14,7 @@ class WarehouseInboundController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
-            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'tanggal_masuk', 'qty', 'satuan', 'harga_satuan', 'total_harga', 'nama_supplier'])],
+            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'kategori', 'tanggal_masuk', 'qty', 'satuan', 'harga_satuan', 'total_harga', 'nama_supplier'])],
             'sort_order' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -25,10 +25,12 @@ class WarehouseInboundController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $records = WarehouseInbound::query()
+            ->with('gudang')
             ->when($search, function ($query, string $keyword) {
                 $query->where(function ($subQuery) use ($keyword): void {
                     $subQuery
                         ->where('nama_barang', 'like', '%'.$keyword.'%')
+                        ->orWhere('kategori', 'like', '%'.$keyword.'%')
                         ->orWhere('nama_supplier', 'like', '%'.$keyword.'%');
                 });
             })
@@ -59,7 +61,7 @@ class WarehouseInboundController extends Controller
 
         return response()->json([
             'message' => 'Data inbound berhasil ditambahkan.',
-            'data' => $record,
+            'data' => $record->load('gudang'),
         ], 201);
     }
 
@@ -67,7 +69,7 @@ class WarehouseInboundController extends Controller
     {
         return response()->json([
             'message' => 'Detail inbound berhasil diambil.',
-            'data' => $inbound,
+            'data' => $inbound->load('gudang'),
         ]);
     }
 
@@ -80,7 +82,7 @@ class WarehouseInboundController extends Controller
 
         return response()->json([
             'message' => 'Data inbound berhasil diperbarui.',
-            'data' => $inbound->fresh(),
+            'data' => $inbound->fresh()->load('gudang'),
         ]);
     }
 
@@ -94,12 +96,14 @@ class WarehouseInboundController extends Controller
     }
 
     /**
-     * @return array{nama_barang:string,tanggal_masuk:string,qty:numeric-string|float|int,satuan:string,harga_satuan:numeric-string|float|int,nama_supplier:string}
+     * @return array{gudang_id:int,nama_barang:string,kategori:string,tanggal_masuk:string,qty:numeric-string|float|int,satuan:string,harga_satuan:numeric-string|float|int,nama_supplier:string}
      */
     private function validatePayload(Request $request): array
     {
         return $request->validate([
+            'gudang_id' => ['required', 'integer', 'exists:gudang,id'],
             'nama_barang' => ['required', 'string', 'max:100'],
+            'kategori' => ['required', Rule::in(['basah', 'kering'])],
             'tanggal_masuk' => ['required', 'date'],
             'qty' => ['required', 'numeric', 'gt:0'],
             'satuan' => ['required', 'string', 'max:50'],

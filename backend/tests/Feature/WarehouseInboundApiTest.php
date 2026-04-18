@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Gudang;
 use App\Models\WarehouseInbound;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,8 +13,14 @@ class WarehouseInboundApiTest extends TestCase
 
     public function test_inbound_index_returns_paginated_records(): void
     {
+        $gudang = Gudang::factory()->create([
+            'nama_gudang' => 'Gudang Kering Utama',
+        ]);
+
         WarehouseInbound::query()->create([
+            'gudang_id' => $gudang->id,
             'nama_barang' => 'Beras',
+            'kategori' => 'kering',
             'tanggal_masuk' => '2026-04-01',
             'qty' => 10,
             'satuan' => 'Kg',
@@ -28,13 +35,24 @@ class WarehouseInboundApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', 'Data inbound berhasil diambil.')
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.nama_barang', 'Beras');
+            ->assertJsonPath('data.0.nama_barang', 'Beras')
+            ->assertJsonPath('data.0.gudang.id', $gudang->id)
+            ->assertJsonPath('data.0.gudang.nama_gudang', 'Gudang Kering Utama');
     }
 
     public function test_inbound_can_be_created_and_updated(): void
     {
+        $gudangAwal = Gudang::factory()->create([
+            'nama_gudang' => 'Gudang Basah',
+        ]);
+        $gudangUpdate = Gudang::factory()->create([
+            'nama_gudang' => 'Gudang Kering',
+        ]);
+
         $createResponse = $this->postJson('/api/inbound', [
+            'gudang_id' => $gudangAwal->id,
             'nama_barang' => 'Minyak Goreng',
+            'kategori' => 'basah',
             'tanggal_masuk' => '2026-04-02',
             'qty' => 5,
             'satuan' => 'Liter',
@@ -44,12 +62,16 @@ class WarehouseInboundApiTest extends TestCase
 
         $createResponse
             ->assertCreated()
-            ->assertJsonPath('data.total_harga', '75000.00');
+            ->assertJsonPath('data.total_harga', '75000.00')
+            ->assertJsonPath('data.gudang.id', $gudangAwal->id)
+            ->assertJsonPath('data.kategori', 'basah');
 
         $recordId = $createResponse->json('data.id');
 
         $this->putJson('/api/inbound/'.$recordId, [
+            'gudang_id' => $gudangUpdate->id,
             'nama_barang' => 'Minyak Goreng Premium',
+            'kategori' => 'kering',
             'tanggal_masuk' => '2026-04-03',
             'qty' => 6,
             'satuan' => 'Liter',
@@ -57,13 +79,19 @@ class WarehouseInboundApiTest extends TestCase
             'nama_supplier' => 'CV Makmur Jaya',
         ])
             ->assertOk()
-            ->assertJsonPath('data.total_harga', '96000.00');
+            ->assertJsonPath('data.total_harga', '96000.00')
+            ->assertJsonPath('data.gudang.id', $gudangUpdate->id)
+            ->assertJsonPath('data.kategori', 'kering');
     }
 
     public function test_inbound_can_be_deleted(): void
     {
+        $gudang = Gudang::factory()->create();
+
         $record = WarehouseInbound::query()->create([
+            'gudang_id' => $gudang->id,
             'nama_barang' => 'Telur',
+            'kategori' => 'basah',
             'tanggal_masuk' => '2026-04-05',
             'qty' => 20,
             'satuan' => 'Butir',

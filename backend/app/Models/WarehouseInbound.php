@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WarehouseInbound extends Model
 {
@@ -12,7 +13,9 @@ class WarehouseInbound extends Model
     protected $table = 'warehouse_inbounds';
 
     protected $fillable = [
+        'gudang_id',
         'nama_barang',
+        'kategori',
         'tanggal_masuk',
         'qty',
         'satuan',
@@ -27,4 +30,9 @@ class WarehouseInbound extends Model
         'harga_satuan' => 'decimal:2',
         'total_harga' => 'decimal:2',
     ];
+
+    public function gudang(): BelongsTo
+    {
+        return $this->belongsTo(Gudang::class, 'gudang_id');
+    }
 }
