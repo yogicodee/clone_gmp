@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\KategoriController;
 use App\Http\Controllers\Api\MitraController;
 use App\Http\Controllers\Api\OrderPenawaranController;
 use App\Http\Controllers\Api\OrderPenawaranItemController;
+use App\Http\Controllers\Api\PerusahaanController;
 use App\Http\Controllers\Api\ProdukController;
 use App\Http\Controllers\Api\SppgController;
 use App\Http\Controllers\Api\SupplierController;
@@ -32,31 +33,40 @@ Route::prefix('auth')->group(function (): void {
     });
 });
 
+// ============================== Master Data ===========================
 Route::apiResource('wilayah', WilayahController::class);
 Route::apiResource('supplier', SupplierController::class);
 Route::apiResource('mitra', MitraController::class);
 Route::apiResource('sppg', SppgController::class);
 Route::apiResource('produk', ProdukController::class);
+Route::apiResource('perusahaan', PerusahaanController::class);
 Route::apiResource('gudang', GudangController::class);
 Route::apiResource('armada', ArmadaController::class);
 Route::apiResource('karyawan', KaryawanController::class);
 Route::apiResource('bank-rekening', BankRekeningController::class);
 Route::apiResource('kategori', KategoriController::class);
+
+// ============================ Transaksi Pembelian ===========================
+// Order Penawaran
 Route::apiResource('order-penawaran', OrderPenawaranController::class);
-Route::apiResource('daftar-pembelanjaan', DaftarPembelanjaanController::class);
-Route::apiResource('inbound', WarehouseInboundController::class);
-Route::apiResource('stok-kering', WarehouseStokKeringController::class);
-Route::apiResource('stok-basah', WarehouseStokBasahController::class);
-Route::apiResource('retur-rusak', WarehouseReturController::class);
 Route::get('order-penawaran/{orderPenawaran}/items', [OrderPenawaranItemController::class, 'index']);
 Route::post('order-penawaran/{orderPenawaran}/items', [OrderPenawaranItemController::class, 'store']);
 Route::get('order-penawaran/{orderPenawaran}/items/{item}', [OrderPenawaranItemController::class, 'show']);
 Route::put('order-penawaran/{orderPenawaran}/items/{item}', [OrderPenawaranItemController::class, 'update']);
 Route::delete('order-penawaran/{orderPenawaran}/items/{item}', [OrderPenawaranItemController::class, 'destroy']);
+// daftar pembelanjaan
+Route::apiResource('daftar-pembelanjaan', DaftarPembelanjaanController::class);
 Route::get('daftar-pembelanjaan/{daftarPembelanjaan}/items', [DaftarPembelanjaanItemController::class, 'index']);
 Route::post('daftar-pembelanjaan/{daftarPembelanjaan}/items', [DaftarPembelanjaanItemController::class, 'store']);
 Route::get('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'show']);
 Route::put('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'update']);
 Route::delete('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'destroy']);
+// daftar pembelanjaan supplier
 Route::get('daftar-pembelanjaan-supplier', [DaftarPembelanjaanSupplierController::class, 'index']);
 Route::get('daftar-pembelanjaan-supplier/{orderPenawaran}', [DaftarPembelanjaanSupplierController::class, 'show']);
+
+// ============================= Warehouse System ===========================
+Route::apiResource('inbound', WarehouseInboundController::class);
+Route::apiResource('stok-kering', WarehouseStokKeringController::class);
+Route::apiResource('stok-basah', WarehouseStokBasahController::class);
+Route::apiResource('retur-rusak', WarehouseReturController::class);
