@@ -14,6 +14,9 @@ class DaftarPembelanjaanItem extends Model
 
     protected $fillable = [
         'daftar_pembelanjaan_id',
+        'supplier_id',
+        'produk_id',
+        'kategori_id',
         'nama_barang',
         'qty',
         'satuan',
@@ -31,5 +34,20 @@ class DaftarPembelanjaanItem extends Model
     public function daftarPembelanjaan(): BelongsTo
     {
         return $this->belongsTo(DaftarPembelanjaan::class, 'daftar_pembelanjaan_id');
+    }
+
+    public function produk(): BelongsTo
+    {
+        return $this->belongsTo(Produk::class, 'produk_id');
+    }
+
+    public function kategori(): BelongsTo
+    {
+        return $this->belongsTo(Kategori::class, 'kategori_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 }

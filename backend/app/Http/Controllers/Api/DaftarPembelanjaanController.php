@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DaftarPembelanjaan;
+use App\Models\OrderPenawaran;
+use App\Models\OrderPenawaranItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class DaftarPembelanjaanController extends Controller
@@ -48,17 +51,23 @@ class DaftarPembelanjaanController extends Controller
     {
         $payload = $this->validatePayload($request);
 
-        $record = DaftarPembelanjaan::query()->create($payload);
+        $record = DB::transaction(function () use ($payload): DaftarPembelanjaan {
+            $record = DaftarPembelanjaan::query()->create($payload);
+
+            $this->copyOrderPenawaranItemsByDate($record);
+
+            return $record;
+        });
 
         return response()->json([
             'message' => 'Daftar pembelanjaan berhasil ditambahkan.',
-            'data' => $record,
+            'data' => $record->load('items'),
         ], 201);
     }
 
     public function show(DaftarPembelanjaan $daftarPembelanjaan): JsonResponse
     {
-        $daftarPembelanjaan->load('items');
+        $daftarPembelanjaan->load(['items.produk', 'items.kategori', 'items.supplier']);
 
         return response()->json([
             'message' => 'Detail daftar pembelanjaan berhasil diambil.',
@@ -95,5 +104,27 @@ class DaftarPembelanjaanController extends Controller
         return $request->validate([
             'tanggal_pesan' => ['required', 'date'],
         ]);
+    }
+
+    private function copyOrderPenawaranItemsByDate(DaftarPembelanjaan $record): void
+    {
+        OrderPenawaran::query()
+            ->whereDate('tanggal_pesan', $record->tanggal_pesan)
+            ->with('items')
+            ->get()
+            ->flatMap(fn (OrderPenawaran $orderPenawaran) => $orderPenawaran->items)
+            ->each(function (OrderPenawaranItem $item) use ($record): void {
+                $record->items()->create([
+                    'produk_id' => $item->produk_id,
+                    'kategori_id' => $item->kategori_id,
+                    'supplier_id' => null,
+                    'nama_barang' => $item->nama_barang,
+                    'qty' => $item->qty,
+                    'satuan' => $item->satuan,
+                    'stok' => 0,
+                    'kebutuhan' => $item->qty,
+                    'nama_supplier' => '',
+                ]);
+            });
     }
 }

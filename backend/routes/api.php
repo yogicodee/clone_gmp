@@ -63,7 +63,7 @@ Route::put('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembe
 Route::delete('daftar-pembelanjaan/{daftarPembelanjaan}/items/{item}', [DaftarPembelanjaanItemController::class, 'destroy']);
 // daftar pembelanjaan supplier
 Route::get('daftar-pembelanjaan-supplier', [DaftarPembelanjaanSupplierController::class, 'index']);
-Route::get('daftar-pembelanjaan-supplier/{orderPenawaran}', [DaftarPembelanjaanSupplierController::class, 'show']);
+Route::get('daftar-pembelanjaan-supplier/{daftarPembelanjaan}', [DaftarPembelanjaanSupplierController::class, 'show']);
 
 // ============================= Warehouse System ===========================
 Route::apiResource('inbound', WarehouseInboundController::class);

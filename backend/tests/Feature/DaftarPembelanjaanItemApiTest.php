@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\DaftarPembelanjaan;
 use App\Models\DaftarPembelanjaanItem;
+use App\Models\Supplier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -69,6 +70,12 @@ class DaftarPembelanjaanItemApiTest extends TestCase
     public function test_daftar_pembelanjaan_item_detail_update_and_delete_work(): void
     {
         $record = DaftarPembelanjaan::query()->create(['tanggal_pesan' => '2026-04-01']);
+        $supplier = Supplier::query()->create([
+            'nama' => 'PT Sumber Pangan Baru',
+            'alamat' => 'Nganjuk',
+            'no_telp' => '08100000099',
+            'kategori' => 'Supplier',
+        ]);
 
         $item = $record->items()->create([
             'nama_barang' => 'Beras',
@@ -84,15 +91,17 @@ class DaftarPembelanjaanItemApiTest extends TestCase
             ->assertJsonPath('data.nama_barang', 'Beras');
 
         $this->putJson('/api/daftar-pembelanjaan/'.$record->id.'/items/'.$item->id, [
+            'supplier_id' => $supplier->id,
             'nama_barang' => 'Beras Premium',
             'qty' => 15,
             'satuan' => 'Kg',
             'stok' => 4,
             'kebutuhan' => 19,
-            'nama_supplier' => 'PT Sumber Pangan Baru',
         ])
             ->assertOk()
-            ->assertJsonPath('data.nama_barang', 'Beras Premium');
+            ->assertJsonPath('data.nama_barang', 'Beras Premium')
+            ->assertJsonPath('data.supplier_id', $supplier->id)
+            ->assertJsonPath('data.nama_supplier', 'PT Sumber Pangan Baru');
 
         $this->deleteJson('/api/daftar-pembelanjaan/'.$record->id.'/items/'.$item->id)
             ->assertOk()

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DaftarPembelanjaan;
 use App\Models\DaftarPembelanjaanItem;
+use App\Models\Supplier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,6 +27,7 @@ class DaftarPembelanjaanItemController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $items = $daftarPembelanjaan->items()
+            ->with(['produk', 'kategori', 'supplier'])
             ->when($search, function ($query, string $keyword) {
                 $query->where(function ($subQuery) use ($keyword): void {
                     $subQuery
@@ -55,12 +57,13 @@ class DaftarPembelanjaanItemController extends Controller
     {
         $payload = $this->validatePayload($request);
         $payload['daftar_pembelanjaan_id'] = $daftarPembelanjaan->id;
+        $payload = $this->normalizePayload($payload);
 
         $item = DaftarPembelanjaanItem::query()->create($payload);
 
         return response()->json([
             'message' => 'Detail pembelanjaan berhasil ditambahkan.',
-            'data' => $item,
+            'data' => $item->load(['produk', 'kategori', 'supplier']),
         ], 201);
     }
 
@@ -70,7 +73,7 @@ class DaftarPembelanjaanItemController extends Controller
 
         return response()->json([
             'message' => 'Detail item pembelanjaan berhasil diambil.',
-            'data' => $item,
+            'data' => $item->load(['produk', 'kategori', 'supplier']),
         ]);
     }
 
@@ -79,11 +82,12 @@ class DaftarPembelanjaanItemController extends Controller
         $this->ensureItemBelongsToRecord($daftarPembelanjaan, $item);
 
         $payload = $this->validatePayload($request);
+        $payload = $this->normalizePayload($payload);
         $item->update($payload);
 
         return response()->json([
             'message' => 'Detail pembelanjaan berhasil diperbarui.',
-            'data' => $item->fresh(),
+            'data' => $item->fresh()->load(['produk', 'kategori', 'supplier']),
         ]);
     }
 
@@ -103,13 +107,29 @@ class DaftarPembelanjaanItemController extends Controller
     private function validatePayload(Request $request): array
     {
         return $request->validate([
+            'produk_id' => ['nullable', 'integer', 'exists:produk,id'],
+            'kategori_id' => ['nullable', 'integer', 'exists:kategori,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:supplier,id'],
             'nama_barang' => ['required', 'string', 'max:100'],
             'qty' => ['required', 'numeric', 'gt:0'],
             'satuan' => ['required', 'string', 'max:50'],
             'stok' => ['required', 'numeric', 'min:0'],
             'kebutuhan' => ['required', 'numeric', 'min:0'],
-            'nama_supplier' => ['required', 'string', 'max:100'],
+            'nama_supplier' => ['nullable', 'string', 'max:100'],
         ]);
+    }
+
+    private function normalizePayload(array $payload): array
+    {
+        if (! empty($payload['supplier_id'])) {
+            $payload['nama_supplier'] = Supplier::query()
+                ->whereKey($payload['supplier_id'])
+                ->value('nama') ?? ($payload['nama_supplier'] ?? '');
+        }
+
+        $payload['nama_supplier'] ??= '';
+
+        return $payload;
     }
 
     private function ensureItemBelongsToRecord(DaftarPembelanjaan $daftarPembelanjaan, DaftarPembelanjaanItem $item): void

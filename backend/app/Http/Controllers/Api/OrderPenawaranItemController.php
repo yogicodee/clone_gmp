@@ -97,12 +97,12 @@ class OrderPenawaranItemController extends Controller
         ]);
     }
 
-    /**
-     * @return array{nama_barang: string, qty: numeric-string|float|int, satuan: string, harga_satuan: numeric-string|float|int, keterangan: string|null}
-     */
     private function validatePayload(Request $request): array
     {
         return $request->validate([
+            'produk_id' => ['nullable', 'integer', 'exists:produk,id'],
+            'kategori_id' => ['nullable', 'integer', 'exists:kategori,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:supplier,id'],
             'nama_barang' => ['required', 'string', 'max:100'],
             'qty' => ['required', 'numeric', 'gt:0'],
             'satuan' => ['required', 'string', 'max:50'],

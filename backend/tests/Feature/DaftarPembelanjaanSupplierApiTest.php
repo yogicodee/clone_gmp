@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\DaftarPembelanjaan;
 use App\Models\Kategori;
-use App\Models\OrderPenawaran;
 use App\Models\Produk;
 use App\Models\Supplier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,32 +13,14 @@ class DaftarPembelanjaanSupplierApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_index_returns_order_penawaran_with_supplier_items_only(): void
+    public function test_index_returns_daftar_pembelanjaan_with_selected_supplier_items_only(): void
     {
-        $includedOrder = OrderPenawaran::query()->create([
+        $includedRecord = DaftarPembelanjaan::query()->create([
             'tanggal_pesan' => '2026-04-09',
-            'tanggal_dikirim' => '2026-04-12',
-            'nama_pembeli' => 'SPPG BB',
-            'keterangan' => 'Order masuk',
         ]);
 
-        $excludedOrder = OrderPenawaran::query()->create([
+        $excludedRecord = DaftarPembelanjaan::query()->create([
             'tanggal_pesan' => '2026-04-10',
-            'tanggal_dikirim' => '2026-04-13',
-            'nama_pembeli' => 'SPPG CC',
-            'keterangan' => 'Tanpa supplier',
-        ]);
-
-        $produk = Produk::query()->create([
-            'sku' => 'BRG-010',
-            'nama' => 'Beras',
-            'kategori' => 'Kering',
-            'satuan' => 'KG',
-        ]);
-
-        $kategori = Kategori::query()->create([
-            'kode' => 'KG',
-            'nama_satuan' => 'Kilogram',
         ]);
 
         $supplier = Supplier::query()->create([
@@ -48,44 +30,39 @@ class DaftarPembelanjaanSupplierApiTest extends TestCase
             'kategori' => 'Supplier',
         ]);
 
-        $includedOrder->items()->create([
-            'produk_id' => $produk->id,
-            'kategori_id' => $kategori->id,
+        $includedRecord->items()->create([
             'supplier_id' => $supplier->id,
             'nama_barang' => 'Beras',
             'qty' => 3,
             'satuan' => 'KG',
-            'harga_satuan' => 9000,
-            'keterangan' => 'Lunas',
+            'stok' => 1,
+            'kebutuhan' => 3,
+            'nama_supplier' => 'PT Sumber Pangan',
         ]);
 
-        $excludedOrder->items()->create([
-            'produk_id' => $produk->id,
-            'kategori_id' => $kategori->id,
+        $excludedRecord->items()->create([
             'supplier_id' => null,
             'nama_barang' => 'Beras',
             'qty' => 2,
             'satuan' => 'KG',
-            'harga_satuan' => 8000,
-            'keterangan' => 'Belum',
+            'stok' => 1,
+            'kebutuhan' => 2,
+            'nama_supplier' => '',
         ]);
 
         $this->getJson('/api/daftar-pembelanjaan-supplier?tanggal_pesan=2026-04-09')
             ->assertOk()
             ->assertJsonPath('message', 'Data daftar pembelanjaan supplier berhasil diambil.')
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', $includedOrder->id)
+            ->assertJsonPath('data.0.id', $includedRecord->id)
             ->assertJsonPath('data.0.supplier_count', 1)
             ->assertJsonPath('data.0.item_count', 1);
     }
 
-    public function test_detail_groups_items_by_supplier_from_order_penawaran_items(): void
+    public function test_detail_groups_items_by_supplier_from_daftar_pembelanjaan_items(): void
     {
-        $order = OrderPenawaran::query()->create([
+        $record = DaftarPembelanjaan::query()->create([
             'tanggal_pesan' => '2026-04-09',
-            'tanggal_dikirim' => '2026-04-12',
-            'nama_pembeli' => 'SPPG BB',
-            'keterangan' => 'Order masuk',
         ]);
 
         $produkBeras = Produk::query()->create([
@@ -123,32 +100,34 @@ class DaftarPembelanjaanSupplierApiTest extends TestCase
             'kategori' => 'Supplier',
         ]);
 
-        $order->items()->create([
+        $record->items()->create([
             'produk_id' => $produkBeras->id,
             'kategori_id' => $kategoriKg->id,
             'supplier_id' => $supplierA->id,
             'nama_barang' => 'Beras',
             'qty' => 5,
             'satuan' => 'KG',
-            'harga_satuan' => 9000,
-            'keterangan' => 'Lunas',
+            'stok' => 2,
+            'kebutuhan' => 5,
+            'nama_supplier' => 'PT Sumber Pangan',
         ]);
 
-        $order->items()->create([
+        $record->items()->create([
             'produk_id' => $produkMinyak->id,
             'kategori_id' => $kategoriLiter->id,
             'supplier_id' => $supplierB->id,
             'nama_barang' => 'Minyak Goreng',
             'qty' => 7,
             'satuan' => 'Liter',
-            'harga_satuan' => 12000,
-            'keterangan' => 'Proses',
+            'stok' => 3,
+            'kebutuhan' => 7,
+            'nama_supplier' => 'CV Makmur Jaya',
         ]);
 
-        $this->getJson('/api/daftar-pembelanjaan-supplier/'.$order->id)
+        $this->getJson('/api/daftar-pembelanjaan-supplier/'.$record->id)
             ->assertOk()
             ->assertJsonPath('message', 'Detail daftar pembelanjaan supplier berhasil diambil.')
-            ->assertJsonPath('data.id', $order->id)
+            ->assertJsonPath('data.id', $record->id)
             ->assertJsonPath('data.tanggal_pesan', '2026-04-09')
             ->assertJsonCount(2, 'data.suppliers')
             ->assertJsonPath('data.suppliers.0.supplier.nama', 'PT Sumber Pangan')

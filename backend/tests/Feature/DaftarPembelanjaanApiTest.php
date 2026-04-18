@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DaftarPembelanjaan;
+use App\Models\OrderPenawaran;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,6 +27,21 @@ class DaftarPembelanjaanApiTest extends TestCase
 
     public function test_daftar_pembelanjaan_can_be_created(): void
     {
+        $order = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-13',
+            'tanggal_dikirim' => '2026-04-15',
+            'nama_pembeli' => 'SPPG AA',
+            'keterangan' => 'Order cepat',
+        ]);
+
+        $order->items()->create([
+            'nama_barang' => 'Beras',
+            'qty' => 10,
+            'satuan' => 'Kg',
+            'harga_satuan' => 12000,
+            'keterangan' => 'Kebutuhan dapur',
+        ]);
+
         $response = $this->postJson('/api/daftar-pembelanjaan', [
             'tanggal_pesan' => '2026-04-13',
         ]);
@@ -33,10 +49,17 @@ class DaftarPembelanjaanApiTest extends TestCase
         $response
             ->assertCreated()
             ->assertJsonPath('message', 'Daftar pembelanjaan berhasil ditambahkan.')
-            ->assertJsonPath('data.tanggal_pesan', '2026-04-13');
+            ->assertJsonPath('data.tanggal_pesan', '2026-04-13')
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.nama_barang', 'Beras')
+            ->assertJsonPath('data.items.0.supplier_id', null);
 
         $this->assertDatabaseHas('daftar_pembelanjaan', [
             'tanggal_pesan' => '2026-04-13',
+        ]);
+        $this->assertDatabaseHas('daftar_pembelanjaan_items', [
+            'nama_barang' => 'Beras',
+            'supplier_id' => null,
         ]);
     }
 

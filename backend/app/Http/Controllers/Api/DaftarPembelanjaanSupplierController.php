@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\OrderPenawaran;
-use App\Models\OrderPenawaranItem;
+use App\Models\DaftarPembelanjaan;
+use App\Models\DaftarPembelanjaanItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -25,11 +25,11 @@ class DaftarPembelanjaanSupplierController extends Controller
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $perPage = $filters['per_page'] ?? 10;
 
-        $records = OrderPenawaran::query()
+        $records = DaftarPembelanjaan::query()
             ->whereHas('items', fn ($query) => $query->whereNotNull('supplier_id'))
             ->withCount([
                 'items as supplier_count' => fn ($query) => $query->selectRaw('COUNT(DISTINCT supplier_id)')->whereNotNull('supplier_id'),
-                'items as item_count',
+                'items as item_count' => fn ($query) => $query->whereNotNull('supplier_id'),
             ])
             ->when($tanggalPesan, fn ($query, string $tanggal) => $query->whereDate('tanggal_pesan', $tanggal))
             ->orderBy($sortField, $sortOrder)
@@ -50,15 +50,15 @@ class DaftarPembelanjaanSupplierController extends Controller
         ]);
     }
 
-    public function show(OrderPenawaran $orderPenawaran): JsonResponse
+    public function show(DaftarPembelanjaan $daftarPembelanjaan): JsonResponse
     {
-        $orderPenawaran->load(['items.produk', 'items.kategori', 'items.supplier']);
+        $daftarPembelanjaan->load(['items.produk', 'items.kategori', 'items.supplier']);
 
-        $suppliers = $orderPenawaran->items
-            ->filter(fn (OrderPenawaranItem $item) => $item->supplier !== null)
+        $suppliers = $daftarPembelanjaan->items
+            ->filter(fn (DaftarPembelanjaanItem $item) => $item->supplier !== null)
             ->groupBy('supplier_id')
             ->map(function ($items): array {
-                /** @var OrderPenawaranItem $firstItem */
+                /** @var DaftarPembelanjaanItem $firstItem */
                 $firstItem = $items->first();
 
                 return [
@@ -69,7 +69,7 @@ class DaftarPembelanjaanSupplierController extends Controller
                         'no_telp' => $firstItem->supplier->no_telp,
                         'kategori' => $firstItem->supplier->kategori,
                     ],
-                    'items' => $items->map(fn (OrderPenawaranItem $item): array => $this->transformItem($item))->values()->all(),
+                    'items' => $items->map(fn (DaftarPembelanjaanItem $item): array => $this->transformItem($item))->values()->all(),
                 ];
             })
             ->values()
@@ -78,20 +78,17 @@ class DaftarPembelanjaanSupplierController extends Controller
         return response()->json([
             'message' => 'Detail daftar pembelanjaan supplier berhasil diambil.',
             'data' => [
-                'id' => $orderPenawaran->id,
-                'tanggal_pesan' => $orderPenawaran->tanggal_pesan,
-                'tanggal_dikirim' => $orderPenawaran->tanggal_dikirim,
-                'nama_pembeli' => $orderPenawaran->nama_pembeli,
-                'keterangan' => $orderPenawaran->keterangan,
+                'id' => $daftarPembelanjaan->id,
+                'tanggal_pesan' => $daftarPembelanjaan->tanggal_pesan,
                 'suppliers' => $suppliers,
             ],
         ]);
     }
 
     /**
-     * @return array{id:int,produk_id:int|null,kategori_id:int|null,supplier_id:int|null,nama_barang:string|null,qty:string|float|int|null,satuan:string|null,harga_satuan:string|float|int|null,stok:int,kebutuhan:string|float|int|null,keterangan:string|null,produk:array{id:int,sku:string|null,nama:string|null,kategori:string|null,satuan:string|null}|null,kategori:array{id:int,kode:string|null,nama_satuan:string|null}|null,supplier:array{id:int,nama:string|null,alamat:string|null,no_telp:string|null,kategori:string|null}|null}
+     * @return array{id:int,produk_id:int|null,kategori_id:int|null,supplier_id:int|null,nama_barang:string|null,qty:string|float|int|null,satuan:string|null,stok:string|float|int|null,kebutuhan:string|float|int|null,nama_supplier:string|null,produk:array{id:int,sku:string|null,nama:string|null,kategori:string|null,satuan:string|null}|null,kategori:array{id:int,kode:string|null,nama_satuan:string|null}|null,supplier:array{id:int,nama:string|null,alamat:string|null,no_telp:string|null,kategori:string|null}|null}
      */
-    private function transformItem(OrderPenawaranItem $item): array
+    private function transformItem(DaftarPembelanjaanItem $item): array
     {
         return [
             'id' => $item->id,
@@ -101,10 +98,9 @@ class DaftarPembelanjaanSupplierController extends Controller
             'nama_barang' => $item->produk?->nama ?? $item->nama_barang,
             'qty' => $item->qty,
             'satuan' => $item->kategori?->nama_satuan ?? $item->satuan,
-            'harga_satuan' => $item->harga_satuan,
-            'stok' => 0,
-            'kebutuhan' => $item->qty,
-            'keterangan' => $item->keterangan,
+            'stok' => $item->stok,
+            'kebutuhan' => $item->kebutuhan,
+            'nama_supplier' => $item->nama_supplier,
             'produk' => $item->produk ? [
                 'id' => $item->produk->id,
                 'sku' => $item->produk->sku,
