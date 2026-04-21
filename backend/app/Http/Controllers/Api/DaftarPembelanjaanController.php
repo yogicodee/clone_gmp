@@ -108,23 +108,42 @@ class DaftarPembelanjaanController extends Controller
 
     private function copyOrderPenawaranItemsByDate(DaftarPembelanjaan $record): void
     {
-        OrderPenawaran::query()
+        $orders = OrderPenawaran::query()
             ->whereDate('tanggal_pesan', $record->tanggal_pesan)
             ->with('items')
-            ->get()
-            ->flatMap(fn (OrderPenawaran $orderPenawaran) => $orderPenawaran->items)
-            ->each(function (OrderPenawaranItem $item) use ($record): void {
-                $record->items()->create([
-                    'produk_id' => $item->produk_id,
-                    'kategori_id' => $item->kategori_id,
-                    'supplier_id' => null,
-                    'nama_barang' => $item->nama_barang,
-                    'qty' => $item->qty,
-                    'satuan' => $item->satuan,
-                    'stok' => 0,
-                    'kebutuhan' => $item->qty,
-                    'nama_supplier' => '',
+            ->get();
+
+        $groupedItems = $orders
+            ->flatMap(function (OrderPenawaran $orderPenawaran) {
+                return $orderPenawaran->items;
+            })
+            ->groupBy(function (OrderPenawaranItem $item): string {
+                return implode('|', [
+                    $item->produk_id ?? 'null',
+                    $item->kategori_id ?? 'null',
+                    mb_strtolower(trim($item->nama_barang)),
+                    mb_strtolower(trim($item->satuan)),
                 ]);
             });
+
+        foreach ($groupedItems as $items) {
+            /** @var OrderPenawaranItem $firstItem */
+            $firstItem = $items->first();
+            $totalQty = $items->sum(function (OrderPenawaranItem $item): float {
+                return (float) $item->qty;
+            });
+
+            $record->items()->create([
+                'produk_id' => $firstItem->produk_id,
+                'kategori_id' => $firstItem->kategori_id,
+                'supplier_id' => null,
+                'nama_barang' => $firstItem->nama_barang,
+                'qty' => $totalQty,
+                'satuan' => $firstItem->satuan,
+                'stok' => 0,
+                'kebutuhan' => $totalQty,
+                'nama_supplier' => '',
+            ]);
+        }
     }
 }

@@ -63,6 +63,56 @@ class DaftarPembelanjaanApiTest extends TestCase
         ]);
     }
 
+    public function test_daftar_pembelanjaan_aggregates_same_items_from_multiple_orders_on_same_date(): void
+    {
+        $firstOrder = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-20',
+            'tanggal_dikirim' => '2026-04-21',
+            'nama_pembeli' => 'SPPG A',
+            'keterangan' => 'Order A',
+        ]);
+
+        $secondOrder = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-20',
+            'tanggal_dikirim' => '2026-04-22',
+            'nama_pembeli' => 'SPPG B',
+            'keterangan' => 'Order B',
+        ]);
+
+        $firstOrder->items()->create([
+            'nama_barang' => 'Pasir',
+            'qty' => 5,
+            'satuan' => 'Kg',
+            'harga_satuan' => 8000,
+            'keterangan' => 'Pesen pertama',
+        ]);
+
+        $secondOrder->items()->create([
+            'nama_barang' => 'Pasir',
+            'qty' => 5,
+            'satuan' => 'Kg',
+            'harga_satuan' => 8500,
+            'keterangan' => 'Pesen kedua',
+        ]);
+
+        $response = $this->postJson('/api/daftar-pembelanjaan', [
+            'tanggal_pesan' => '2026-04-20',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.nama_barang', 'Pasir')
+            ->assertJsonPath('data.items.0.qty', '10.00')
+            ->assertJsonPath('data.items.0.kebutuhan', '10.00');
+
+        $this->assertDatabaseHas('daftar_pembelanjaan_items', [
+            'nama_barang' => 'Pasir',
+            'qty' => '10.00',
+            'kebutuhan' => '10.00',
+        ]);
+    }
+
     public function test_daftar_pembelanjaan_detail_returns_items(): void
     {
         $record = DaftarPembelanjaan::query()->create(['tanggal_pesan' => '2026-04-01']);

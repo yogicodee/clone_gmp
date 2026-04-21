@@ -49,6 +49,7 @@ Route::apiResource('kategori', KategoriController::class);
 // ============================ Transaksi Pembelian ===========================
 // Order Penawaran
 Route::apiResource('order-penawaran', OrderPenawaranController::class);
+Route::get('order-penawaran/filter/by-tanggal', [OrderPenawaranController::class, 'byTanggal']);
 Route::get('order-penawaran/{orderPenawaran}/items', [OrderPenawaranItemController::class, 'index']);
 Route::post('order-penawaran/{orderPenawaran}/items', [OrderPenawaranItemController::class, 'store']);
 Route::get('order-penawaran/{orderPenawaran}/items/{item}', [OrderPenawaranItemController::class, 'show']);

@@ -62,6 +62,25 @@ class OrderPenawaranController extends Controller
         ], 201);
     }
 
+    public function byTanggal(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+        ]);
+
+        $orders = OrderPenawaran::query()
+            ->with('items')
+            ->whereDate('tanggal_pesan', $validated['tanggal'])
+            ->orderBy('tanggal_pesan')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json([
+            'message' => 'Data order penawaran berdasarkan tanggal berhasil diambil.',
+            'data' => $orders,
+        ]);
+    }
+
     public function show(OrderPenawaran $orderPenawaran): JsonResponse
     {
         $orderPenawaran->load('items');

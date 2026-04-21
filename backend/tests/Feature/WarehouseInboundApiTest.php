@@ -68,6 +68,12 @@ class WarehouseInboundApiTest extends TestCase
 
         $recordId = $createResponse->json('data.id');
 
+        $this->assertDatabaseHas('warehouse_stok_basah', [
+            'warehouse_inbound_id' => $recordId,
+            'gudang_id' => $gudangAwal->id,
+            'nama_barang' => 'Minyak Goreng',
+        ]);
+
         $this->putJson('/api/inbound/'.$recordId, [
             'gudang_id' => $gudangUpdate->id,
             'nama_barang' => 'Minyak Goreng Premium',
@@ -82,6 +88,16 @@ class WarehouseInboundApiTest extends TestCase
             ->assertJsonPath('data.total_harga', '96000.00')
             ->assertJsonPath('data.gudang.id', $gudangUpdate->id)
             ->assertJsonPath('data.kategori', 'kering');
+
+        $this->assertDatabaseMissing('warehouse_stok_basah', [
+            'warehouse_inbound_id' => $recordId,
+        ]);
+
+        $this->assertDatabaseHas('warehouse_stok_kering', [
+            'warehouse_inbound_id' => $recordId,
+            'gudang_id' => $gudangUpdate->id,
+            'nama_barang' => 'Minyak Goreng Premium',
+        ]);
     }
 
     public function test_inbound_can_be_deleted(): void
@@ -106,6 +122,10 @@ class WarehouseInboundApiTest extends TestCase
 
         $this->assertDatabaseMissing('warehouse_inbounds', [
             'id' => $record->id,
+        ]);
+
+        $this->assertDatabaseMissing('warehouse_stok_basah', [
+            'warehouse_inbound_id' => $record->id,
         ]);
     }
 }

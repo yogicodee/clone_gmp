@@ -25,6 +25,7 @@ class WarehouseStokBasahController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $records = WarehouseStokBasah::query()
+            ->with('gudang')
             ->when($search, fn ($query, string $keyword) => $query->where('nama_barang', 'like', '%'.$keyword.'%'))
             ->orderBy($sortField, $sortOrder)
             ->paginate($perPage)
@@ -50,7 +51,7 @@ class WarehouseStokBasahController extends Controller
 
         return response()->json([
             'message' => 'Data stok basah berhasil ditambahkan.',
-            'data' => $record,
+            'data' => $record->load('gudang'),
         ], 201);
     }
 
@@ -58,7 +59,7 @@ class WarehouseStokBasahController extends Controller
     {
         return response()->json([
             'message' => 'Detail stok basah berhasil diambil.',
-            'data' => $stokBasah,
+            'data' => $stokBasah->load('gudang'),
         ]);
     }
 
@@ -68,7 +69,7 @@ class WarehouseStokBasahController extends Controller
 
         return response()->json([
             'message' => 'Data stok basah berhasil diperbarui.',
-            'data' => $stokBasah->fresh(),
+            'data' => $stokBasah->fresh()->load('gudang'),
         ]);
     }
 
@@ -87,6 +88,7 @@ class WarehouseStokBasahController extends Controller
     private function validatePayload(Request $request): array
     {
         return $request->validate([
+            'gudang_id' => ['required', 'integer', 'exists:gudang,id'],
             'nama_barang' => ['required', 'string', 'max:100'],
             'qty' => ['required', 'numeric', 'min:0'],
             'satuan_terkecil' => ['required', 'string', 'max:50'],

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Gudang;
 use App\Models\WarehouseStokKering;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,7 +13,12 @@ class WarehouseStokKeringApiTest extends TestCase
 
     public function test_stok_kering_crud_works(): void
     {
+        $gudang = Gudang::factory()->create([
+            'nama_gudang' => 'Gudang Kering',
+        ]);
+
         $createResponse = $this->postJson('/api/stok-kering', [
+            'gudang_id' => $gudang->id,
             'nama_barang' => 'Beras',
             'qty' => 10,
             'satuan_terkecil' => 'Kg',
@@ -21,7 +27,8 @@ class WarehouseStokKeringApiTest extends TestCase
 
         $createResponse
             ->assertCreated()
-            ->assertJsonPath('message', 'Data stok kering berhasil ditambahkan.');
+            ->assertJsonPath('message', 'Data stok kering berhasil ditambahkan.')
+            ->assertJsonPath('data.gudang.id', $gudang->id);
 
         $recordId = $createResponse->json('data.id');
 
@@ -30,6 +37,7 @@ class WarehouseStokKeringApiTest extends TestCase
             ->assertJsonCount(1, 'data');
 
         $this->putJson('/api/stok-kering/'.$recordId, [
+            'gudang_id' => $gudang->id,
             'nama_barang' => 'Beras Premium',
             'qty' => 12,
             'satuan_terkecil' => 'Kg',

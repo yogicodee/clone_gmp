@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\WarehouseInbound;
+use App\Models\WarehouseStokBasah;
+use App\Models\WarehouseStokKering;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class WarehouseInboundController extends Controller
@@ -57,7 +60,13 @@ class WarehouseInboundController extends Controller
         $payload = $this->validatePayload($request);
         $payload['total_harga'] = $this->calculateTotalHarga($payload['qty'], $payload['harga_satuan']);
 
-        $record = WarehouseInbound::query()->create($payload);
+        $record = DB::transaction(function () use ($payload): WarehouseInbound {
+            $record = WarehouseInbound::query()->create($payload);
+
+            $this->syncStockFromInbound($record);
+
+            return $record;
+        });
 
         return response()->json([
             'message' => 'Data inbound berhasil ditambahkan.',
@@ -78,7 +87,10 @@ class WarehouseInboundController extends Controller
         $payload = $this->validatePayload($request);
         $payload['total_harga'] = $this->calculateTotalHarga($payload['qty'], $payload['harga_satuan']);
 
-        $inbound->update($payload);
+        DB::transaction(function () use ($inbound, $payload): void {
+            $inbound->update($payload);
+            $this->syncStockFromInbound($inbound->fresh());
+        });
 
         return response()->json([
             'message' => 'Data inbound berhasil diperbarui.',
@@ -88,7 +100,10 @@ class WarehouseInboundController extends Controller
 
     public function destroy(WarehouseInbound $inbound): JsonResponse
     {
-        $inbound->delete();
+        DB::transaction(function () use ($inbound): void {
+            $this->deleteSyncedStockRecords($inbound->id);
+            $inbound->delete();
+        });
 
         return response()->json([
             'message' => 'Data inbound berhasil dihapus.',
@@ -119,5 +134,38 @@ class WarehouseInboundController extends Controller
     private function calculateTotalHarga($qty, $hargaSatuan): float
     {
         return (float) $qty * (float) $hargaSatuan;
+    }
+
+    private function syncStockFromInbound(WarehouseInbound $inbound): void
+    {
+        $this->deleteSyncedStockRecords($inbound->id);
+
+        $attributes = [
+            'warehouse_inbound_id' => $inbound->id,
+            'gudang_id' => $inbound->gudang_id,
+            'nama_barang' => $inbound->nama_barang,
+            'qty' => $inbound->qty,
+            'satuan_terkecil' => $inbound->satuan,
+            'harga_beli' => $inbound->harga_satuan,
+        ];
+
+        if ($inbound->kategori === 'kering') {
+            WarehouseStokKering::query()->create($attributes);
+
+            return;
+        }
+
+        WarehouseStokBasah::query()->create($attributes);
+    }
+
+    private function deleteSyncedStockRecords(int $inboundId): void
+    {
+        WarehouseStokKering::query()
+            ->where('warehouse_inbound_id', $inboundId)
+            ->delete();
+
+        WarehouseStokBasah::query()
+            ->where('warehouse_inbound_id', $inboundId)
+            ->delete();
     }
 }
