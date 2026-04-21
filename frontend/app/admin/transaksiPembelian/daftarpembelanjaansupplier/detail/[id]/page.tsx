@@ -126,7 +126,7 @@ export default function Page() {
 
             {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">
+                <h1 className="text-3xl font-bold">
                     Detail Order #{params?.id}
                 </h1>
 

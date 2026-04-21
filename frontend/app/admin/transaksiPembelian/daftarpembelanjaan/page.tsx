@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
+import { ArrowUpDown, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Order = {
@@ -16,10 +18,7 @@ type FormType = Omit<Order, "id">;
 export default function Page() {
     const router = useRouter();
 
-    const [data, setData] = useState<Order[]>([
-        { id: 1, tanggal_pesan: "2026-04-01" },
-        { id: 2, tanggal_pesan: "2026-04-02" },
-    ]);
+    const { data, loading, refetch } = useFetch<Order>("/order-penawaran"); // Get Data via useFetch
 
     const [form, setForm] = useState<FormType>({
         tanggal_pesan: "",
@@ -41,39 +40,6 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
-
-    const handleSubmit = () => {
-        if (!form.tanggal_pesan) return;
-
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
-        }
-
-        resetForm();
-    };
-
-    const handleEdit = (item: Order) => {
-        const { id, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
-        setOpenForm(true);
-    };
-
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
-            setDeleteId(null);
-        }
-    };
 
     const resetForm = () => {
         setForm({ tanggal_pesan: "" });
@@ -112,11 +78,27 @@ export default function Page() {
         return result;
     }, [data, filterTanggal, sortField, sortOrder]);
 
+    const groupedData = useMemo(() => {
+        const groups: Record<string, Order[]> = {};
+
+        filteredData.forEach((item) => {
+            if (!groups[item.tanggal_pesan]) {
+                groups[item.tanggal_pesan] = [];
+            }
+            groups[item.tanggal_pesan].push(item);
+        });
+
+        return Object.entries(groups).map(([tanggal, items]) => ({
+            tanggal,
+            items,
+        }));
+    }, [filteredData]);
+
     /* ================= PAGINATION ================= */
 
-    const totalPages = Math.ceil(filteredData.length / perPage);
+    const totalPages = Math.ceil(groupedData.length / perPage);
 
-    const paginatedData = filteredData.slice(
+    const paginatedData = groupedData.slice(
         (currentPage - 1) * perPage,
         currentPage * perPage
     );
@@ -134,7 +116,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Daftar Pembelanjaan</h1>
+                <h1 className="text-3xl font-bold">Daftar Pembelanjaan</h1>
             </div>
 
             {/* FILTER */}
@@ -146,7 +128,7 @@ export default function Page() {
                     className="border p-2 rounded-md bg-white shadow"
                 />
 
-                
+
             </div>
 
             {/* TABLE */}
@@ -168,24 +150,29 @@ export default function Page() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
+                        {paginatedData.map((group, index) => (
+                            <tr
+                                key={group.tanggal}
+                                className="border-t border-primary/20 hover:bg-white/50"
+                            >
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.tanggal_pesan}</td>
+
+                                {/* tampilkan tanggal sekali */}
+                                <td className="p-3">{group.tanggal}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
                                         onClick={() =>
-                                            router.push(`/admin/transaksiPembelian/daftarpembelanjaan/detail/${item.id}`)
+                                            router.push(
+                                                `/admin/transaksiPembelian/daftarpembelanjaan/detail/${group.tanggal}`
+                                            )
                                         }
                                         className="p-2 bg-green-500/30 text-green-700 rounded-md"
                                     >
                                         <Eye size={14} />
                                     </button>
-
-                                   
                                 </td>
                             </tr>
                         ))}
@@ -207,9 +194,8 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${
-                            currentPage === i + 1 ? "bg-primary text-white" : ""
-                        }`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
+                            }`}
                     >
                         {i + 1}
                     </button>
@@ -224,66 +210,10 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* FORM MODAL */}
-            <AnimatePresence>
-                {openForm && (
-                    <Modal onClose={resetForm}>
-                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                {editId ? "Edit Data" : "Tambah Data"}
-                            </h2>
 
-                            <input
-                                type="date"
-                                value={form.tanggal_pesan}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        tanggal_pesan: e.target.value,
-                                    })
-                                }
-                                className="w-full border p-2 rounded-md"
-                            />
 
-                            <div className="flex justify-end gap-2">
-                                <button
-                                    onClick={resetForm}
-                                    className="px-4 py-2 bg-gray-200 rounded-md"
-                                >
-                                    Batal
-                                </button>
 
-                                <button
-                                    onClick={handleSubmit}
-                                    className="px-4 py-2 bg-blue-700 text-white rounded-md"
-                                >
-                                    Simpan
-                                </button>
-                            </div>
-                        </motion.div>
-                    </Modal>
-                )}
-            </AnimatePresence>
-
-           
         </div>
     );
 }
 
-/* ================= MODAL ================= */
-function Modal({
-    children,
-    onClose,
-}: {
-    children: React.ReactNode;
-    onClose: () => void;
-}) {
-    return (
-        <motion.div
-            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-            onClick={onClose}
-        >
-            <div onClick={(e) => e.stopPropagation()}>{children}</div>
-        </motion.div>
-    );
-}

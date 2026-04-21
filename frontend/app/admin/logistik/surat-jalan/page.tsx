@@ -3,126 +3,110 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useParams, useRouter } from "next/navigation";
-import { useFetch } from "@/hooks/useFetch";
-import api from "@/lib/api";
 
 /* ================= TYPE ================= */
-type Item = {
+type Product = {
     id: number;
-    nama_barang: string;
-    qty: number;
-    satuan: string;
-    harga_satuan: number;
-    keterangan: string;
+    nomor_invoice: string;
+    penjualan_id: string;
+    tanggal_invoice: string;
+    total_tagihan: string;
+    status_pembayaran: "lunas" | "belum lunas";
 };
 
-type FormType = {
-    nama_barang: string;
-    qty: number;
-    satuan: string;
-    harga_satuan: number;
-    keterangan: string;
-};
+type FormType = Omit<Product, "id">;
 
-export default function DetailPage() {
-    const params = useParams();
-    const id = Array.isArray(params.id) ? params.id[0] : params.id ?? "";
-    const router = useRouter();
-
-    // Get Data via useFetch
-    const endpoint = id ? `/order-penawaran/${id}/items` : "";
-
-    const { data, loading, refetch } = useFetch<Item[]>(endpoint);
-
-    const items: Item[] = Array.isArray(data) ? data : [];
-
-    const { data: barangList } = useFetch<any>("/produk");
-    const { data: satuanList } = useFetch<any>("/kategori");
-
+export default function Page() {
+    const [data, setData] = useState<Product[]>([
+        {
+            id: 1,
+            nomor_invoice: "INV-001",
+            penjualan_id: "TRX-001",
+            tanggal_invoice: "2026-04-13",
+            total_tagihan: "100000",
+            status_pembayaran: "belum lunas",
+        },
+        {
+            id: 2,
+            nomor_invoice: "INV-002",
+            penjualan_id: "TRX-002",
+            tanggal_invoice: "2026-04-12",
+            total_tagihan: "250000",
+            status_pembayaran: "lunas",
+        },
+    ]);
 
     const [form, setForm] = useState<FormType>({
-        nama_barang: "",
-        qty: 0,
-        satuan: "",
-        harga_satuan: 0,
-        keterangan: "",
+        nomor_invoice: "",
+        penjualan_id: "",
+        tanggal_invoice: "",
+        total_tagihan: "",
+        status_pembayaran: "belum lunas",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
+    /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
-    const [sortField, setSortField] = useState<keyof Item>("nama_barang");
+
+    /* ================= SORT ================= */
+    const [sortField, setSortField] = useState<keyof Product>("nomor_invoice");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+    /* ================= PAGINATION ================= */
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
     /* ================= HANDLE ================= */
 
-    const handleSubmit = async () => {
-        if (
-            !form.nama_barang ||
-            form.qty <= 0 ||
-            !form.satuan ||
-            form.harga_satuan <= 0 ||
-            !form.keterangan
-        ) return;
+    const handleSubmit = () => {
+        if (!form.nomor_invoice || !form.penjualan_id || !form.tanggal_invoice || !form.total_tagihan) return;
 
-        try {
-            if (editId) {
-                await api.put(`/order-penawaran/${id}/items/${editId}`, form); // ✅ FIX
-            } else {
-                await api.post(`/order-penawaran/${id}/items`, form);
-            }
-
-            await refetch();
-            resetForm();
-        } catch (error) {
-            console.error(error);
+        if (editId) {
+            setData((prev) =>
+                prev.map((item) =>
+                    item.id === editId ? { ...item, ...form } : item
+                )
+            );
+        } else {
+            setData((prev) => [
+                ...prev,
+                { id: Date.now(), ...form },
+            ]);
         }
+
+        resetForm();
     };
 
-    const handleEdit = (item: Item) => {
-        setForm({
-            nama_barang: item.nama_barang || "",
-            qty: item.qty || 0,
-            satuan: item.satuan || "",
-            harga_satuan: item.harga_satuan || 0,
-            keterangan: item.keterangan || "",
-        });
-
-        setEditId(item.id); // ✅ FIX
+    const handleEdit = (item: Product) => {
+        const { id, ...rest } = item;
+        setForm(rest);
+        setEditId(id);
         setOpenForm(true);
     };
 
-    const handleDelete = async () => {
-        if (!deleteId) return;
-
-        try {
-            await api.delete(`/order-penawaran/${id}/items/${deleteId}`); // ✅ FIX
-            await refetch();
+    const handleDelete = () => {
+        if (deleteId) {
+            setData((prev) => prev.filter((item) => item.id !== deleteId));
             setDeleteId(null);
-        } catch (error) {
-            console.error(error);
         }
     };
 
     const resetForm = () => {
         setForm({
-            nama_barang: "",
-            qty: 0,
-            satuan: "",
-            harga_satuan: 0,
-            keterangan: "",
+            nomor_invoice: "",
+            penjualan_id: "",
+            tanggal_invoice: "",
+            total_tagihan: "",
+            status_pembayaran: "belum lunas",
         });
         setEditId(null);
         setOpenForm(false);
     };
 
-    const handleSort = (field: keyof Item) => {
+    const handleSort = (field: keyof Product) => {
         if (sortField === field) {
             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
         } else {
@@ -134,19 +118,19 @@ export default function DetailPage() {
     /* ================= FILTER + SORT ================= */
 
     const filteredData = useMemo(() => {
-        let result = [...items];
+        let result = [...data];
 
         if (search) {
             result = result.filter(
                 (item) =>
-                    item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
-                    item.keterangan.toLowerCase().includes(search.toLowerCase())
+                    item.nomor_invoice.toLowerCase().includes(search.toLowerCase()) ||
+                    item.penjualan_id.toLowerCase().includes(search.toLowerCase())
             );
         }
 
         result.sort((a, b) => {
-            const aVal = String(a[sortField] ?? "").toLowerCase();
-            const bVal = String(b[sortField] ?? "").toLowerCase();
+            const aVal = String(a[sortField]).toLowerCase();
+            const bVal = String(b[sortField]).toLowerCase();
 
             if (sortOrder === "asc") return aVal.localeCompare(bVal);
             return bVal.localeCompare(aVal);
@@ -168,27 +152,21 @@ export default function DetailPage() {
         setCurrentPage(1);
     }, [search]);
 
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(1);
+        }
+    }, [filteredData]);
+
     return (
         <div className="p-6 space-y-6">
-
-            {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">
-                    Detail Order #{id}
-                </h1>
-
-                <button
-                    onClick={() => router.back()}
-                    className="px-4 py-2 bg-white rounded-md"
-                >
-                    Kembali
-                </button>
+                <h1 className="text-3xl font-bold">Surat Jalan dan Tanda Terima</h1>
             </div>
 
-            {/* SEARCH + ADD */}
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari barang..."
+                    placeholder="Cari nomor invoice atau ID penjualan..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
@@ -199,7 +177,7 @@ export default function DetailPage() {
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
-                    Tambah Barang
+                    Tambah Data
                 </button>
             </div>
 
@@ -209,15 +187,37 @@ export default function DetailPage() {
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3 text-left">
-                                <button onClick={() => handleSort("nama_barang")} className="flex gap-2">
-                                    Nama Barang <ArrowUpDown size={14} />
+
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nomor_invoice")} className="flex items-center gap-2">
+                                    Nomor Invoice <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3 text-left">Qty</th>
-                            <th className="p-3 text-left">Satuan</th>
-                            <th className="p-3 text-left">Harga Penawaran</th>
-                            <th className="p-3 text-left">Keterangan</th>
+
+                            <th className="p-3">
+                                <button onClick={() => handleSort("penjualan_id")} className="flex items-center gap-2">
+                                    ID Penjualan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+
+                            <th className="p-3">
+                                <button onClick={() => handleSort("tanggal_invoice")} className="flex items-center gap-2">
+                                    Tanggal Invoice <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+
+                            <th className="p-3">
+                                <button onClick={() => handleSort("total_tagihan")} className="flex items-center gap-2">
+                                    Total Tagihan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+
+                            <th className="p-3">
+                                <button onClick={() => handleSort("status_pembayaran")} className="flex items-center gap-2">
+                                    Status <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -228,17 +228,11 @@ export default function DetailPage() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama_barang}</td>
-                                <td className="p-3">
-                                    {Number(item.qty).toLocaleString("id-ID", {
-                                        maximumFractionDigits: 0,
-                                    })}
-                                </td>
-                                <td className="p-3">{item.satuan}</td>
-                                <td className="p-3">
-                                    Rp {Number(item.harga_satuan).toLocaleString("id-ID")}
-                                </td>
-                                <td className="p-3">{item.keterangan}</td>
+                                <td className="p-3">{item.nomor_invoice}</td>
+                                <td className="p-3">{item.penjualan_id}</td>
+                                <td className="p-3">{item.tanggal_invoice}</td>
+                                <td className="p-3">{item.total_tagihan}</td>
+                                <td className="p-3 capitalize">{item.status_pembayaran}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -291,79 +285,53 @@ export default function DetailPage() {
                 </button>
             </div>
 
-            {/* FORM MODAL */}
+            {/* FORM MODAL tetap sama style */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
                             <h2 className="text-lg font-semibold">
-                                {editId ? "Edit Barang" : "Tambah Barang"}
+                                {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            {/* Selesct Barang */}
+                            <input
+                                placeholder="Nomor Invoice"
+                                value={form.nomor_invoice}
+                                onChange={(e) => setForm({ ...form, nomor_invoice: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                placeholder="ID Penjualan"
+                                value={form.penjualan_id}
+                                onChange={(e) => setForm({ ...form, penjualan_id: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                type="date"
+                                value={form.tanggal_invoice}
+                                onChange={(e) => setForm({ ...form, tanggal_invoice: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
+                            <input
+                                placeholder="Total Tagihan"
+                                value={form.total_tagihan}
+                                onChange={(e) => setForm({ ...form, total_tagihan: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            />
+
                             <select
-                                value={form.nama_barang}
-                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
+                                value={form.status_pembayaran}
+                                onChange={(e) =>
+                                    setForm({ ...form, status_pembayaran: e.target.value as any })
+                                }
                                 className="w-full border p-2 rounded-md"
                             >
-                                <option value="">Pilih Kategori</option>
-                                {barangList?.map((item: any) => (
-                                    <option key={item.id} value={item.nama}>
-                                        {item.nama}
-                                    </option>
-                                ))}
+                                <option value="belum lunas">Belum Lunas</option>
+                                <option value="lunas">Lunas</option>
                             </select>
-
-                            <input
-                                type="number"
-                                placeholder="Qty"
-                                value={form.qty ? parseInt(String(form.qty)) : ""}
-                                onChange={(e) =>
-                                    setForm({ ...form, qty: Number(e.target.value) })
-                                }
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            {/* Selesct Kategori */}
-                            <select
-                                value={form.satuan}
-                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            >
-                                <option value="">Pilih Satuan</option>
-                                {satuanList?.map((item: any) => (
-                                    <option key={item.id} value={item.nama_satuan}>
-                                        {item.nama_satuan}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {/* INPUT HARGA AUTO FORMAT */}
-                            <input
-                                type="text"
-                                placeholder="Harga Satuan"
-                                value={
-                                    form.harga_satuan
-                                        ? Number(form.harga_satuan).toLocaleString("id-ID", {
-                                            maximumFractionDigits: 0,
-                                        })
-                                        : ""
-                                }
-                                onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
-                                    setForm({ ...form, harga_satuan: Number(raw) });
-                                }}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                placeholder="Keterangan"
-                                value={form.keterangan}
-                                onChange={(e) =>
-                                    setForm({ ...form, keterangan: e.target.value })
-                                }
-                                className="w-full border p-2 rounded-md"
-                            />
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
@@ -379,12 +347,14 @@ export default function DetailPage() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE MODAL */}
+            {/* MODAL DELETE tetap */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
+                            <h2 className="text-lg font-semibold">
+                                Hapus Data?
+                            </h2>
 
                             <div className="flex justify-center gap-2">
                                 <button
@@ -409,7 +379,7 @@ export default function DetailPage() {
     );
 }
 
-/* ================= MODAL ================= */
+/* MODAL tetap sama */
 function Modal({
     children,
     onClose,

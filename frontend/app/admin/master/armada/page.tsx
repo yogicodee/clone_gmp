@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -15,10 +17,7 @@ type Product = {
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        { id: 1, nama_unit: "Truck Box 01", no_pol: "B 1234 CD", jenis_kendaraan: "Roda 4" },
-        { id: 2, nama_unit: "Pickup 02", no_pol: "D 5678 EF", jenis_kendaraan: "Roda 4" },
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/armada"); // Get Data via useFetch
 
     const [listJenisKendaraan, setListJenisKendaraan] = useState([
         "Roda 2",
@@ -49,23 +48,21 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!form.nama_unit || !form.no_pol || !form.jenis_kendaraan) return;
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
-        }
+        try {
+            if (editId) {
+                await api.put(`/armada/${editId}`, form);
+            } else {
+                await api.post("/armada", form);
+            }
 
-        resetForm();
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const handleEdit = (item: Product) => {
@@ -75,10 +72,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/armada/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -143,7 +145,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Armada</h1>
+                <h1 className="text-3xl font-bold">Data Armada</h1>
             </div>
 
             <div className="flex items-center justify-between">

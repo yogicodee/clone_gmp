@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Order = {
@@ -19,22 +21,8 @@ type FormType = Omit<Order, "id">;
 export default function Page() {
     const router = useRouter();
 
-    const [data, setData] = useState<Order[]>([
-        {
-            id: 1,
-            tanggal_pesan: "2026-04-01",
-            tanggal_dikirim: "2026-04-03",
-            nama_pembeli: "SPPG Nganjuk",
-            keterangan: "Order cepat",
-        },
-        {
-            id: 2,
-            tanggal_pesan: "2026-04-02",
-            tanggal_dikirim: "2026-04-05",
-            nama_pembeli: "SPPG Surabaya",
-            keterangan: "Prioritas tinggi",
-        },
-    ]);
+    const { data, loading, refetch } = useFetch<Order>("/order-penawaran"); // Get Data via useFetch
+    const { data: mitraData } = useFetch<any>("/sppg");
 
     const [form, setForm] = useState<FormType>({
         tanggal_pesan: "",
@@ -59,37 +47,39 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
+    const handleSubmit = async () => {
+        if (!form.tanggal_pesan || !form.tanggal_dikirim || !form.nama_pembeli || !form.keterangan) return;
 
-    const handleSubmit = () => {
-        if (!form.tanggal_pesan || !form.tanggal_dikirim || !form.nama_pembeli) return;
+        try {
+            if (editId) {
+                await api.put(`/order-penawaran/${editId}`, form);
+            } else {
+                await api.post("/order-penawaran", form);
+            }
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
         }
-
-        resetForm();
     };
 
-    const handleEdit = (item: Order) => {
+    const handleEdit = (item: Product) => {
         const { id, ...rest } = item;
         setForm(rest);
         setEditId(id);
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/order-penawaran/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -159,7 +149,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">List Order dan Penawaran</h1>
+                <h1 className="text-3xl font-bold">List Order dan Penawaran</h1>
             </div>
 
             <div className="flex items-center justify-between">
@@ -314,9 +304,12 @@ export default function Page() {
                                 onChange={(e) => setForm({ ...form, nama_pembeli: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             >
-                                <option value="">Pilih Nama Pembeli</option>
-                                <option value="SPPG Ceweng">SPPG Ceweng</option>
-                                <option value="SPPG Candi">SPPG Candi</option>
+                                <option value="">Pilih Nama Yayasan</option>
+                                {mitraData.map((item: any) => (
+                                    <option key={item.id} value={item.nama_sppg}>
+                                        {item.nama_sppg}
+                                    </option>
+                                ))}
                             </select>
 
                             <h1 className="mb-2">Keterangan</h1>

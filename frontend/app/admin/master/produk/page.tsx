@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -15,21 +17,9 @@ type Product = {
 
 type FormType = Omit<Product, "id">;
 
-
-
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        { id: 1, sku: "BRG-001", nama: "Beras", kategori: "Kering", satuan: "Kg" },
-        { id: 2, sku: "BRG-002", nama: "Minyak Goreng", kategori: "Basah", satuan: "Liter" },
-        { id: 3, sku: "BRG-003", nama: "Telur", kategori: "Kering", satuan: "Butir" },
-    ]);
-
-    const [listSatuan, setListSatuan] = useState([
-        "PCS",
-        "BOX",
-        "KG",
-        "LITER",
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/produk"); // Get Data via useFetch
+    const { data: mitraData } = useFetch<any>("/kategori");
 
     const [listKategori, setListKategori] = useState([
         "Kering",
@@ -59,24 +49,21 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
-
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!form.sku || !form.nama || !form.kategori || !form.satuan) return;
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
-        }
+        try {
+            if (editId) {
+                await api.put(`/produk/${editId}`, form);
+            } else {
+                await api.post("/produk", form);
+            }
 
-        resetForm();
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const handleEdit = (item: Product) => {
@@ -86,10 +73,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/produk/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -155,7 +147,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Barang</h1>
+                <h1 className="text-3xl font-bold">Data Barang</h1>
             </div>
 
             <div className="flex items-center justify-between">
@@ -318,9 +310,9 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Satuan</option>
-                                {listSatuan.map((item, i) => (
-                                    <option key={i} value={item}>
-                                        {item}
+                                {mitraData.map((item: any) => (
+                                    <option key={item.id} value={item.kode}>
+                                        {item.kode}
                                     </option>
                                 ))}
                             </select>

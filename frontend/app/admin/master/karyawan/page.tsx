@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown, Circle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -18,26 +20,7 @@ type Product = {
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        {
-            id: 1,
-            nama: "Budi",
-            alamat: "Bandung",
-            no_hp: "08123456789",
-            jabatan: "Admin",
-            tanggal_masuk: "2023-01-10",
-            status: "aktif",
-        },
-        {
-            id: 2,
-            nama: "Siti",
-            alamat: "Jakarta",
-            no_hp: "08234567890",
-            jabatan: "Gudang",
-            tanggal_masuk: "2022-06-15",
-            status: "non aktif",
-        },
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/karyawan"); // Get Data via useFetch
 
     const [form, setForm] = useState<FormType>({
         nama: "",
@@ -73,29 +56,21 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
 
-    const handleSubmit = () => {
-        if (
-            !form.nama ||
-            !form.alamat ||
-            !form.no_hp ||
-            !form.jabatan ||
-            !form.tanggal_masuk
-        ) return;
+    const handleSubmit = async () => {
+        if (!form.nama || !form.alamat || !form.no_hp || !form.jabatan || !form.tanggal_masuk || !form.status) return;
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
+        try {
+            if (editId) {
+                await api.put(`/karyawan/${editId}`, form);
+            } else {
+                await api.post("/karyawan", form);
+            }
+
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
         }
-
-        resetForm();
     };
 
     const handleEdit = (item: Product) => {
@@ -105,10 +80,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/karyawan/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -180,7 +160,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Karyawan</h1>
+                <h1 className="text-3xl font-bold">Data Karyawan</h1>
             </div>
 
             <div className="flex items-center justify-between">

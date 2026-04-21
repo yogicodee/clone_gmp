@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -17,39 +19,8 @@ type Product = {
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        {
-            id: 1,
-            nama_sppg: "SPPG Ceweng",
-            alamat: "Bandung",
-            nama_yayasan: "Yayasan Harapan",
-            nama_penanggungjawab: "Budi",
-            no_penanggungjawab: "08123456789",
-        },
-        {
-            id: 2,
-            nama_sppg: "SPPG Candi",
-            alamat: "Jakarta",
-            nama_yayasan: "Yayasan Sejahtera",
-            nama_penanggungjawab: "Siti",
-            no_penanggungjawab: "08234567890",
-        },
-        {
-            id: 3,
-            nama_sppg: "SPPG Jonggol",
-            alamat: "Jakarta",
-            nama_yayasan: "Yayasan Sejahtera",
-            nama_penanggungjawab: "Siti",
-            no_penanggungjawab: "08234567890",
-        },
-    ]);
-
-    const [listYayasan, setListYayasan] = useState([
-        "Yayasan 1",
-        "Yayasan 2",
-        "Yayasan 3",
-        "Yayasan 4",
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/sppg"); // Get Data via useFetch
+    const { data: mitraData } = useFetch<any>("/mitra");
 
     const [form, setForm] = useState<FormType>({
         nama_sppg: "",
@@ -75,30 +46,21 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
+    const handleSubmit = async () => {
+        if (!form.nama_sppg || !form.alamat || !form.nama_yayasan || !form.nama_penanggungjawab || !form.no_penanggungjawab) return;
 
-    const handleSubmit = () => {
-        if (
-            !form.nama_sppg ||
-            !form.alamat ||
-            !form.nama_yayasan ||
-            !form.nama_penanggungjawab ||
-            !form.no_penanggungjawab
-        ) return;
+        try {
+            if (editId) {
+                await api.put(`/sppg/${editId}`, form);
+            } else {
+                await api.post("/sppg", form);
+            }
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
         }
-
-        resetForm();
     };
 
     const handleEdit = (item: Product) => {
@@ -108,10 +70,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/sppg/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -182,7 +149,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data SPPG</h1>
+                <h1 className="text-3xl font-bold">Data SPPG</h1>
             </div>
 
             <div className="flex items-center justify-between">
@@ -335,9 +302,9 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Nama Yayasan</option>
-                                {listYayasan.map((item, i) => (
-                                    <option key={i} value={item}>
-                                        {item}
+                                {mitraData.map((item: any) => (
+                                    <option key={item.id} value={item.nama_yayasan}>
+                                        {item.nama_yayasan}
                                     </option>
                                 ))}
                             </select>

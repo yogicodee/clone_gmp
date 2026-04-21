@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import api from "@/lib/api";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api"; 
 
 /* ================= TYPE ================= */
 type Product = {
@@ -15,20 +16,8 @@ type Product = {
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        { id: 1, nama: "Asikin Aurelia", alamat: "Ploso" },
-        { id: 2, nama: "PT Santika", alamat: "Jakarta" },
-        { id: 3, nama: "CV Aulia", alamat: "Bandung" },
-        { id: 4, nama: "PT Maju Jaya", alamat: "Surabaya" },
-        { id: 5, nama: "Asikin Aurelia", alamat: "Ploso" },
-        { id: 6, nama: "PT Santika", alamat: "Jakarta" },
-        { id: 7, nama: "CV Aulia", alamat: "Bandung" },
-        { id: 8, nama: "PT Maju Jaya", alamat: "Surabaya" },
-        { id: 9, nama: "Asikin Aurelia", alamat: "Ploso" },
-        { id: 10, nama: "PT Santika", alamat: "Jakarta" },
-        { id: 11, nama: "CV Aulia", alamat: "Bandung" },
-        { id: 12, nama: "PT Maju Jaya", alamat: "Surabaya" },
-    ]);
+
+    const { data, loading, refetch } = useFetch<Product>("/wilayah");
 
     const [form, setForm] = useState<FormType>({
         nama: "",
@@ -62,7 +51,7 @@ export default function Page() {
                 await api.post("/wilayah", form);
             }
 
-            await fetchData(); // refresh data
+            await refetch();
             resetForm();
         } catch (error) {
             console.error(error);
@@ -81,7 +70,7 @@ export default function Page() {
 
         try {
             await api.delete(`/wilayah/${deleteId}`);
-            await fetchData();
+            await refetch();
             setDeleteId(null);
         } catch (error) {
             console.error(error);
@@ -136,20 +125,7 @@ export default function Page() {
         currentPage * perPage
     );
 
-    // API
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
-        try {
-            const res = await api.get("/wilayah"); // sesuai route kamu
-            setData(res.data.data ?? res.data);
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
+    // Pagination
     // ✅ FIX: reset page saat filter berubah
     useEffect(() => {
         setCurrentPage(1);
@@ -168,7 +144,7 @@ export default function Page() {
         <div className="p-6 space-y-6">
             {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Wilayah Dan Lokasi</h1>
+                <h1 className="text-3xl font-bold">Wilayah Dan Lokasi</h1>
 
 
             </div>

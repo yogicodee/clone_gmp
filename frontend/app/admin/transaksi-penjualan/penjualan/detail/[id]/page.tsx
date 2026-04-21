@@ -169,7 +169,7 @@ export default function Page() {
         <div className="p-6 space-y-6">
             {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">
+                <h1 className="text-3xl font-bold">
                     Detail Penjualan #{params.id}
                 </h1>
 

@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -16,22 +18,7 @@ type Product = {
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        {
-            id: 1,
-            nama_bank: "BCA",
-            no_rek: "1234567890",
-            atas_nama: "PT Maju Jaya",
-            cabang: "Bandung",
-        },
-        {
-            id: 2,
-            nama_bank: "BRI",
-            no_rek: "9876543210",
-            atas_nama: "CV Aulia",
-            cabang: "Jakarta",
-        },
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/bank-rekening"); // Get Data via useFetch
 
     const [form, setForm] = useState<FormType>({
         nama_bank: "",
@@ -57,23 +44,21 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!form.nama_bank || !form.no_rek || !form.atas_nama || !form.cabang) return;
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
-        }
+        try {
+            if (editId) {
+                await api.put(`/bank-rekening/${editId}`, form);
+            } else {
+                await api.post("/bank-rekening", form);
+            }
 
-        resetForm();
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const handleEdit = (item: Product) => {
@@ -83,10 +68,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/bank-rekening/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -152,7 +142,7 @@ export default function Page() {
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Bank & Rekening</h1>
+                <h1 className="text-3xl font-bold">Data Bank & Rekening</h1>
             </div>
 
             <div className="flex items-center justify-between">
@@ -321,6 +311,33 @@ export default function Page() {
             </AnimatePresence>
 
             {/* DELETE MODAL tetap sama */}
+            <AnimatePresence>
+                {deleteId && (
+                    <Modal onClose={() => setDeleteId(null)}>
+                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
+                            <h2 className="text-lg font-semibold">
+                                Hapus Data?
+                            </h2>
+
+                            <div className="flex justify-center gap-2">
+                                <button
+                                    onClick={() => setDeleteId(null)}
+                                    className="px-4 py-2 bg-gray-200 rounded-md"
+                                >
+                                    Batal
+                                </button>
+
+                                <button
+                                    onClick={handleDelete}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md"
+                                >
+                                    Hapus
+                                </button>
+                            </div>
+                        </motion.div>
+                    </Modal>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

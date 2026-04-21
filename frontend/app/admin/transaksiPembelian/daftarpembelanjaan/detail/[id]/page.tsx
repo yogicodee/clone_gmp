@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Pencil, ArrowUpDown } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
+import { useFetch } from "@/hooks/useFetch";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Item = {
@@ -11,162 +12,142 @@ type Item = {
     nama_barang: string;
     qty: number;
     satuan: string;
-    stok: number;
-    kebutuhan: number;
-    nama_supplier: string;
+    stok?: number;
+    nama_supplier?: string;
+    harga_satuan?: number;
+
+    order_penawaran_id?: number;
+    orderPenawaranId?: number;
+    order_id?: number;
+    order_penawaran?: { id: number };
 };
 
-type FormType = Omit<Item, "id">;
+type GroupedItem = Item & {
+    ids: number[]; // 🔥 penting untuk update massal
+    kebutuhan: number;
+};
+
+type Supplier = {
+    id: number;
+    nama: string;
+};
 
 export default function Page() {
-    const [data, setData] = useState<Item[]>([
-        {
-            id: 1,
-            nama_barang: "Beras",
-            qty: 10,
-            satuan: "Kg",
-            stok: 5,
-            kebutuhan: 5,
-            nama_supplier: "PT Sumber Pangan",
-        },
-        {
-            id: 2,
-            nama_barang: "Minyak Goreng",
-            qty: 20,
-            satuan: "Liter",
-            stok: 10,
-            kebutuhan: 10,
-            nama_supplier: "CV Makmur Jaya",
-        },
-    ]);
-
-    const barangList = ["Beras", "Minyak Goreng", "Gula", "Telur"];
-    const satuanList = ["Kg", "Liter", "Pcs", "Dus"];
-    const supplierList = ["PT Sumber Pangan", "CV Makmur Jaya", "PT Sejahtera", "UD Berkah"];
-
-    const [form, setForm] = useState({
-        nama_barang: "",
-        qty: "",
-        satuan: "",
-        stok: "",
-        kebutuhan: "",
-        nama_supplier: "",
-    });
-
-    const [editId, setEditId] = useState<number | null>(null);
-    const [openForm, setOpenForm] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
     const router = useRouter();
     const params = useParams();
+    const tanggal = params.id;
 
-    /* ================= FILTER ================= */
+    const endpoint =
+        tanggal && typeof tanggal === "string"
+            ? `http://localhost:8000/api/order-penawaran/filter/by-tanggal?tanggal=${tanggal}`
+            : null;
+
+    const { data: resData, loading } = useFetch<any>(endpoint);
+
+    /* ================= STATE ================= */
+    const [localData, setLocalData] = useState<Item[]>([]);
+    const [orderId, setOrderId] = useState<number | null>(null);
+
+    const [openModal, setOpenModal] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<GroupedItem | null>(null);
+    const [supplier, setSupplier] = useState("");
+
     const [search, setSearch] = useState("");
-
-    /* ================= SORT ================= */
     const [sortField, setSortField] = useState<keyof Item>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-    /* ================= PAGINATION ================= */
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    /* ================= HANDLE ================= */
-    const handleSubmit = () => {
-        if (!form.nama_barang) return;
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
-        const qty = Number(form.qty);
-        const stok = Number(form.stok);
-        const kebutuhan = Math.max(qty - stok, 0);
-
-        const payload = {
-            ...form,
-            qty,
-            stok,
-            kebutuhan,
+    /* ================= FETCH SUPPLIER ================= */
+    useEffect(() => {
+        const fetchSuppliers = async () => {
+            try {
+                const res = await axios.get("http://localhost:8000/api/supplier");
+                setSuppliers(res.data.data || res.data);
+            } catch (err) {
+                console.error("Gagal ambil supplier", err);
+            }
         };
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...payload } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...payload },
-            ]);
+        fetchSuppliers();
+    }, []);
+
+    /* ================= LOAD DATA ================= */
+    useEffect(() => {
+        const raw: Item[] = Array.isArray(resData?.data)
+            ? resData.data
+            : Array.isArray(resData)
+                ? resData
+                : [];
+
+        setLocalData(raw);
+
+        if (raw.length > 0) {
+            const first = raw[0];
+
+            const detectedId =
+                first.order_penawaran_id ||
+                first.orderPenawaranId ||
+                first.order_id ||
+                first.order_penawaran?.id ||
+                null;
+
+            setOrderId(detectedId);
         }
+    }, [resData]);
 
-        resetForm();
-    };
+    /* ================= GROUPING ================= */
+    const filteredData: GroupedItem[] = useMemo(() => {
+        const grouped: Record<string, GroupedItem> = {};
 
+        localData.forEach((item) => {
+            const key = `${item.nama_barang}-${item.satuan}`;
 
-    const isEdit = !!editId;
-
-    const handleEdit = (item: Item) => {
-        const { id, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
-        setOpenForm(true);
-    };
-
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
-            setDeleteId(null);
-        }
-    };
-
-    const resetForm = () => {
-        setForm({
-            nama_barang: "",
-            qty: 0,
-            satuan: "",
-            stok: 0,
-            kebutuhan: 0,
-            nama_supplier: "",
+            if (!grouped[key]) {
+                grouped[key] = {
+                    ...item,
+                    ids: [item.id],
+                    qty: Number(item.qty) || 0,
+                    stok: item.stok || 0,
+                    nama_supplier: item.nama_supplier || "-",
+                    kebutuhan: 0,
+                };
+            } else {
+                grouped[key].qty += Number(item.qty) || 0;
+                grouped[key].stok += item.stok || 0;
+                grouped[key].ids.push(item.id);
+            }
         });
-        setEditId(null);
-        setOpenForm(false);
-    };
 
-    const handleSort = (field: keyof Item) => {
-        if (sortField === field) {
-            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-        } else {
-            setSortField(field);
-            setSortOrder("asc");
-        }
-    };
-
-    /* ================= FILTER + SORT ================= */
-
-    const filteredData = useMemo(() => {
-        let result = [...data];
+        let result = Object.values(grouped).map((item) => ({
+            ...item,
+            kebutuhan: Math.max(item.qty - (item.stok || 0), 0),
+        }));
 
         if (search) {
             result = result.filter(
                 (item) =>
                     item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
-                    item.nama_supplier.toLowerCase().includes(search.toLowerCase())
+                    (item.nama_supplier || "").toLowerCase().includes(search.toLowerCase())
             );
         }
 
         result.sort((a, b) => {
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
+            const aVal = String(a[sortField] ?? "").toLowerCase();
+            const bVal = String(b[sortField] ?? "").toLowerCase();
 
             if (sortOrder === "asc") return aVal.localeCompare(bVal);
             return bVal.localeCompare(aVal);
         });
 
         return result;
-    }, [data, search, sortField, sortOrder]);
+    }, [localData, search, sortField, sortOrder]);
 
     /* ================= PAGINATION ================= */
-
-    const totalPages = Math.ceil(filteredData.length / perPage);
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / perPage));
 
     const paginatedData = filteredData.slice(
         (currentPage - 1) * perPage,
@@ -177,12 +158,68 @@ export default function Page() {
         setCurrentPage(1);
     }, [search]);
 
+    const handleSort = (field: keyof Item) => {
+        if (sortField === field) {
+            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+        } else {
+            setSortField(field);
+            setSortOrder("asc");
+        }
+    };
+
+    /* ================= SAVE ================= */
+    const handleSave = async () => {
+        if (!selectedItem) {
+            alert("Data tidak lengkap");
+            return;
+        }
+
+        try {
+            const payload = {
+                nama_barang: selectedItem.nama_barang,
+                qty: Number(selectedItem.qty),
+                satuan: selectedItem.satuan,
+                nama_supplier: supplier,
+                harga_satuan: selectedItem.harga_satuan || 1,
+            };
+
+            await Promise.all(
+                selectedItem.ids.map((id) => {
+                    const item = localData.find((x) => x.id === id);
+
+                    if (!item || !item.order_penawaran_id) {
+                        console.warn("SKIP ITEM:", id);
+                        return Promise.resolve();
+                    }
+
+                    return axios.put(
+                        `http://localhost:8000/api/order-penawaran/${item.order_penawaran_id}/items/${id}`,
+                        payload
+                    );
+                })
+            );
+
+            // update local state
+            setLocalData((prev) =>
+                prev.map((item) =>
+                    selectedItem.ids.includes(item.id)
+                        ? { ...item, nama_supplier: supplier }
+                        : item
+                )
+            );
+
+            setOpenModal(false);
+        } catch (err: any) {
+            console.log("ERROR:", err.response?.data);
+            alert("Gagal update, cek console");
+        }
+    };
+
     return (
         <div className="p-6 space-y-6">
-            {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">
-                    Detail Order #{params.id}
+                <h1 className="text-3xl font-bold">
+                    Detail Order Tanggal {tanggal}
                 </h1>
 
                 <button
@@ -200,30 +237,33 @@ export default function Page() {
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white"
                 />
-
-
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3 text-left" onClick={() => handleSort("nama_barang")}>Barang</th>
-                            <th className="p-3 text-left">Qty</th>
-                            <th className="p-3 text-left">Satuan</th>
-                            <th className="p-3 text-left">Stok</th>
-                            <th className="p-3 text-left">Kebutuhan</th>
-                            <th className="p-3 text-left">Supplier</th>
+                            <th className="p-3 text-left cursor-pointer" onClick={() => handleSort("nama_barang")}>
+                                Barang <ArrowUpDown size={14} className="inline" />
+                            </th>
+                            <th className="p-3">Qty</th>
+                            <th className="p-3">Satuan</th>
+                            <th className="p-3">Stok</th>
+                            <th className="p-3">Kebutuhan</th>
+                            <th className="p-3">Supplier</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
-                                <td className="p-3 text-center">{index + 1}</td>
+                        {loading ? (
+                            <tr><td colSpan={8} className="p-3 text-center">Loading...</td></tr>
+                        ) : paginatedData.map((item, index) => (
+                            <tr key={item.ids.join("-")} className="border-t hover:bg-white/50">
+                                <td className="p-3 text-center">
+                                    {(currentPage - 1) * perPage + index + 1}
+                                </td>
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.qty}</td>
                                 <td className="p-3">{item.satuan}</td>
@@ -231,12 +271,17 @@ export default function Page() {
                                 <td className="p-3">{item.kebutuhan}</td>
                                 <td className="p-3">{item.nama_supplier}</td>
 
-                                <td className="p-3 flex justify-center gap-2">
-                                    <button onClick={() => handleEdit(item)} className="p-2 bg-blue-500/30 rounded">
+                                <td className="p-3 flex justify-center">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedItem(item);
+                                            setSupplier(item.nama_supplier || "");
+                                            setOpenModal(true);
+                                        }}
+                                        className="p-2 bg-blue-500/30 rounded"
+                                    >
                                         <Pencil size={14} />
                                     </button>
-
-
                                 </td>
                             </tr>
                         ))}
@@ -244,150 +289,45 @@ export default function Page() {
                 </table>
             </div>
 
-            {/* PAGINATION */}
-            <div className="flex justify-end gap-2">
-                <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 border rounded-md"
-                >
-                    Prev
-                </button>
+            {openModal && selectedItem && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg w-[400px] space-y-4">
+                        <h2 className="text-xl font-bold">Edit Supplier</h2>
 
-                {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                        key={i}
-                        onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
-                    >
-                        {i + 1}
-                    </button>
-                ))}
+                        <div className="text-sm text-gray-600">
+                            <p><b>Barang:</b> {selectedItem.nama_barang}</p>
+                            <p><b>Qty:</b> {selectedItem.qty}</p>
+                            <p><b>Satuan:</b> {selectedItem.satuan}</p>
+                        </div>
 
-                <button
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 border rounded-md"
-                >
-                    Next
-                </button>
-            </div>
+                        <select
+                            value={supplier}
+                            onChange={(e) => setSupplier(e.target.value)}
+                            className="w-full border p-2 rounded"
+                        >
+                            <option value="">-- Pilih Supplier --</option>
+                            {suppliers.map((sup) => (
+                                <option key={sup.id} value={sup.nama}>
+                                    {sup.nama}
+                                </option>
+                            ))}
+                        </select>
 
-            {/* FORM */}
-            <AnimatePresence>
-                {openForm && (
-                    <Modal onClose={resetForm}>
-                        <motion.div className="bg-white rounded-lg p-6 w-100 max-w-md space-y-4">
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setOpenModal(false)} className="px-3 py-1 bg-gray-200 rounded">
+                                Batal
+                            </button>
 
-                            {/* NAMA BARANG */}
-                            <select
-                                disabled={isEdit}
-                                value={form.nama_barang}
-                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
-                                className="w-full border p-2 rounded-md bg-white"
+                            <button
+                                onClick={handleSave}
+                                className="px-3 py-1 bg-green-500 text-white rounded"
                             >
-                                <option value="">Pilih Nama Barang</option>
-                                {barangList.map((item) => (
-                                    <option key={item} value={item}>
-                                        {item}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {/* QTY */}
-                            <input
-                                disabled={isEdit}
-                                type="text"
-                                placeholder="Qty"
-                                value={
-                                    form.qty
-                                        ? Number(form.qty).toLocaleString("id-ID")
-                                        : ""
-                                }
-                                onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
-                                    setForm({ ...form, qty: raw });
-                                }}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            {/* SATUAN */}
-                            <select
-                                disabled={isEdit}
-                                value={form.satuan}
-                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
-                                className="w-full border p-2 rounded-md bg-white"
-                            >
-                                <option value="">Pilih Satuan</option>
-                                {satuanList.map((item) => (
-                                    <option key={item} value={item}>
-                                        {item}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {/* STOK */}
-                            <input
-                                disabled={isEdit}
-                                type="text"
-                                placeholder="Stok"
-                                value={
-                                    form.stok
-                                        ? Number(form.stok).toLocaleString("id-ID")
-                                        : ""
-                                }
-                                onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
-                                    setForm({ ...form, stok: raw });
-                                }}
-                                className="w-full border p-2 rounded-md"
-                            />
-
-
-                            {/* SUPPLIER */}
-                            <select
-                                value={form.nama_supplier}
-                                onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
-                                className="w-full border p-2 rounded-md bg-white"
-                            >
-                                <option value="">Pilih Supplier</option>
-                                {supplierList.map((item) => (
-                                    <option key={item} value={item}>
-                                        {item}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {/* ACTION */}
-                            <div className="flex justify-end gap-2 pt-2">
-                                <button
-                                    onClick={resetForm}
-                                    className="px-3 py-1 bg-gray-200 rounded-md"
-                                >
-                                    Batal
-                                </button>
-
-                                <button
-                                    onClick={handleSubmit}
-                                    className="px-3 py-1 bg-blue-600 text-white rounded-md"
-                                >
-                                    Simpan
-                                </button>
-                            </div>
-                        </motion.div>
-                    </Modal>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-}
-
-/* MODAL */
-function Modal({ children, onClose }: any) {
-    return (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center" onClick={onClose}>
-            <div onClick={(e) => e.stopPropagation()}>{children}</div>
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

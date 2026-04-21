@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -16,16 +18,11 @@ type Product = {
 type FormType = Omit<Product, "id">;
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        { id: 1, nama: "Asikin Aurelia", alamat: "Ploso", no_telp: "08123456789", kategori: "Retail" },
-        { id: 2, nama: "PT Santika", alamat: "Jakarta", no_telp: "08234567890", kategori: "Distributor" },
-        { id: 3, nama: "CV Aulia", alamat: "Bandung", no_telp: "08345678901", kategori: "Grosir" },
-        { id: 4, nama: "PT Maju Jaya", alamat: "Surabaya", no_telp: "08456789012", kategori: "Supplier" },
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/supplier"); // Get Data via useFetch
 
-    const [listKategori, setListKategori] = useState([
-        "Ikan",
-        "Sayur",
+    const [listKategori] = useState([
+        "ikan",
+        "sayur",
     ]);
 
     const [form, setForm] = useState<FormType>({
@@ -52,23 +49,21 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
 
-    const handleSubmit = () => {
-        if (!form.nama || !form.alamat || !form.no_telp || !form.kategori) return;
+    const handleSubmit = async () => {
+        if (!form.nama || !form.alamat) return;
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
+        try {
+            if (editId) {
+                await api.put(`/supplier/${editId}`, form);
+            } else {
+                await api.post("/supplier", form);
+            }
+
+            await refetch();
+            resetForm();
+        } catch (error) {
+            console.error(error);
         }
-
-        resetForm();
     };
 
     const handleEdit = (item: Product) => {
@@ -78,10 +73,15 @@ export default function Page() {
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/supplier/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -147,7 +147,7 @@ export default function Page() {
         <div className="p-6 space-y-6">
             {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Data Supplier</h1>
+                <h1 className="text-3xl font-bold">Data Supplier</h1>
             </div>
 
             <div className="flex items-center justify-between">

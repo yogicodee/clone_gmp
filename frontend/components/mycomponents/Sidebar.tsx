@@ -29,6 +29,10 @@ import {
   ScrollText,
   ArrowLeftRight,
   CircleDollarSign,
+  Forklift,
+  Hourglass,
+  Mails,
+  Building,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
@@ -50,6 +54,7 @@ const menus = [
       { icon: <Car size={16} />, label: "Armada", path: "/admin/master/armada" },
       { icon: <Users size={16} />, label: "Karyawan", path: "/admin/master/karyawan" },
       { icon: <Banknote size={16} />, label: "Bank & Rekening", path: "/admin/master/bank" },
+      { icon: <Building size={16} />, label: "Perusahaan", path: "/admin/master/perusahaan" },
       { icon: <ShieldCheck size={16} />, label: "Kategori & Satuan", path: "/admin/master/kategori" },
     ],
   },
@@ -81,7 +86,16 @@ const menus = [
     children: [
       { icon: <CircleDollarSign size={16} />, label: "Penjualan", path: "/admin/transaksi-penjualan/penjualan" },
       { icon: <FileText size={16} />, label: "Invoice Penjualan", path: "/admin/transaksi-penjualan/invoice-penjualan" },
-      
+
+    ],
+  },
+  {
+    label: "Logistik",
+    icon: <Forklift />,
+    key: "logistik",
+    children: [
+      { icon: <Hourglass size={16} />, label: "Jadwal Pengiriman", path: "/admin/logistik/jadwal-pengiriman" },
+      { icon: <Mails size={16} />, label: "Surat Jalan", path: "/admin/logistik/surat-jalan" },
     ],
   },
   {
