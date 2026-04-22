@@ -1,219 +1,273 @@
+
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { ArrowUpDown, Eye } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Eye, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useFetch } from "@/hooks/useFetch";
+
 import api from "@/lib/api";
-
-/* ================= TYPE ================= */
-type Order = {
-    id: number;
-    tanggal_pesan: string;
-};
-
-type FormType = Omit<Order, "id">;
+import {
+    ApiListResponse,
+    DaftarPembelanjaan,
+    extractErrorMessage,
+} from "@/lib/transaksiPembelian";
 
 export default function Page() {
     const router = useRouter();
 
-    const { data, loading, refetch } = useFetch<Order>("/order-penawaran"); // Get Data via useFetch
+    const [data, setData] = useState<DaftarPembelanjaan[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+    const [filterDate, setFilterDate] = useState("");
 
-    const [form, setForm] = useState<FormType>({
-        tanggal_pesan: "",
-    });
-
-    const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
-
-    /* ================= FILTER ================= */
-    const [filterTanggal, setFilterTanggal] = useState("");
-
-    /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Order>("tanggal_pesan");
-    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-
-    /* ================= PAGINATION ================= */
+    const [tanggalPesan, setTanggalPesan] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    /* ================= HANDLE ================= */
+    async function fetchData() {
+        try {
+            setLoading(true);
+            setError("");
 
-    const resetForm = () => {
-        setForm({ tanggal_pesan: "" });
-        setEditId(null);
-        setOpenForm(false);
-    };
+            const response = await api.get<ApiListResponse<DaftarPembelanjaan>>(
+                "/daftar-pembelanjaan",
+                { params: { per_page: 100 } }
+            );
 
-    const handleSort = (field: keyof Order) => {
-        if (sortField === field) {
-            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-        } else {
-            setSortField(field);
-            setSortOrder("asc");
+            setData(response.data.data ?? []);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setLoading(false);
         }
-    };
+    }
 
-    /* ================= FILTER + SORT ================= */
+    useEffect(() => {
+        void fetchData();
+    }, []);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterDate]);
 
     const filteredData = useMemo(() => {
-        let result = [...data];
-
-        if (filterTanggal) {
-            result = result.filter(
-                (item) => item.tanggal_pesan === filterTanggal
-            );
+        if (!filterDate) {
+            return data;
         }
 
-        result.sort((a, b) => {
-            const aVal = a[sortField];
-            const bVal = b[sortField];
+        return data.filter((item) => item.tanggal_pesan === filterDate);
+    }, [data, filterDate]);
 
-            if (sortOrder === "asc") return aVal.localeCompare(bVal);
-            return bVal.localeCompare(aVal);
-        });
-
-        return result;
-    }, [data, filterTanggal, sortField, sortOrder]);
-
-    const groupedData = useMemo(() => {
-        const groups: Record<string, Order[]> = {};
-
-        filteredData.forEach((item) => {
-            if (!groups[item.tanggal_pesan]) {
-                groups[item.tanggal_pesan] = [];
-            }
-            groups[item.tanggal_pesan].push(item);
-        });
-
-        return Object.entries(groups).map(([tanggal, items]) => ({
-            tanggal,
-            items,
-        }));
-    }, [filteredData]);
-
-    /* ================= PAGINATION ================= */
-
-    const totalPages = Math.ceil(groupedData.length / perPage);
-
-    const paginatedData = groupedData.slice(
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / perPage));
+    const paginatedData = filteredData.slice(
         (currentPage - 1) * perPage,
         currentPage * perPage
     );
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [filterTanggal]);
-
-    useEffect(() => {
         if (currentPage > totalPages) {
             setCurrentPage(1);
         }
-    }, [filteredData]);
+    }, [currentPage, totalPages]);
+
+    async function handleCreate() {
+        try {
+            setSubmitting(true);
+            setError("");
+            setSuccess("");
+
+            await api.post("/daftar-pembelanjaan", {
+                tanggal_pesan: tanggalPesan,
+            });
+
+            setSuccess("Daftar pembelanjaan berhasil dibuat dari order penawaran pada tanggal tersebut.");
+            setTanggalPesan("");
+            setOpenForm(false);
+            await fetchData();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setSubmitting(false);
+        }
+    }
 
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">Daftar Pembelanjaan</h1>
+                <h1 className="text-xl font-bold">Daftar Pembelanjaan</h1>
             </div>
 
-            {/* FILTER */}
-            <div className="flex items-center justify-between">
+            {error ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {error}
+                </div>
+            ) : null}
+
+            {success ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {success}
+                </div>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-4">
                 <input
                     type="date"
-                    value={filterTanggal}
-                    onChange={(e) => setFilterTanggal(e.target.value)}
-                    className="border p-2 rounded-md bg-white shadow"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="border p-2 rounded-md w-52 bg-white shadow"
                 />
 
-
+                <button
+                    onClick={() => setOpenForm(true)}
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
+                >
+                    <Plus size={16} />
+                    Tambah Data
+                </button>
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3">
-                                <button
-                                    onClick={() => handleSort("tanggal_pesan")}
-                                    className="flex gap-2"
-                                >
-                                    Tgl Pesan <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-                            <th className="p-3 text-center">Aksi</th>
+                            <th className="p-3">Tgl Pesan</th>
+                            <th className="p-3">Aksi</th>
                         </tr>
                     </thead>
-
                     <tbody>
-                        {paginatedData.map((group, index) => (
-                            <tr
-                                key={group.tanggal}
-                                className="border-t border-primary/20 hover:bg-white/50"
-                            >
-                                <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
-                                </td>
-
-                                {/* tampilkan tanggal sekali */}
-                                <td className="p-3">{group.tanggal}</td>
-
-                                <td className="p-3 flex justify-center gap-2">
-                                    <button
-                                        onClick={() =>
-                                            router.push(
-                                                `/admin/transaksiPembelian/daftarpembelanjaan/detail/${group.tanggal}`
-                                            )
-                                        }
-                                        className="p-2 bg-green-500/30 text-green-700 rounded-md"
-                                    >
-                                        <Eye size={14} />
-                                    </button>
+                        {loading ? (
+                            <tr>
+                                <td colSpan={3} className="p-6 text-center text-gray-500">
+                                    Memuat data...
                                 </td>
                             </tr>
-                        ))}
+                        ) : paginatedData.length === 0 ? (
+                            <tr>
+                                <td colSpan={3} className="p-6 text-center text-gray-500">
+                                    Belum ada data daftar pembelanjaan.
+                                </td>
+                            </tr>
+                        ) : (
+                            paginatedData.map((item, index) => (
+                                <tr
+                                    key={item.id}
+                                    className="border-t border-primary/20 hover:bg-white/50"
+                                >
+                                    <td className="p-3 text-center">
+                                        {(currentPage - 1) * perPage + index + 1}
+                                    </td>
+                                    <td className="p-3">{item.tanggal_pesan}</td>
+                                    <td className="p-3">
+                                        <div className="flex justify-center">
+                                            <button
+                                                onClick={() =>
+                                                    router.push(
+                                                        `/admin/transaksiPembelian/daftarpembelanjaan/detail/${item.id}`
+                                                    )
+                                                }
+                                                className="p-2 bg-green-500/30 text-green-700 rounded-md"
+                                            >
+                                                <Eye size={14} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
                     disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 border rounded-md"
+                    onClick={() => setCurrentPage((prev) => prev - 1)}
+                    className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
                     Prev
                 </button>
 
-                {Array.from({ length: totalPages }, (_, i) => (
+                {Array.from({ length: totalPages }, (_, index) => (
                     <button
-                        key={i}
-                        onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
+                        key={index}
+                        onClick={() => setCurrentPage(index + 1)}
+                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
-                        {i + 1}
+                        {index + 1}
                     </button>
                 ))}
 
                 <button
                     disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 border rounded-md"
+                    onClick={() => setCurrentPage((prev) => prev + 1)}
+                    className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
                     Next
                 </button>
             </div>
 
+            <AnimatePresence>
+                {openForm ? (
+                    <Modal onClose={() => setOpenForm(false)}>
+                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
+                            <h2 className="text-lg font-semibold">Tambah Data</h2>
 
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Tanggal Pesan</label>
+                                <input
+                                    type="date"
+                                    value={tanggalPesan}
+                                    onChange={(e) => setTanggalPesan(e.target.value)}
+                                    className="w-full border p-2 rounded-md"
+                                />
+                            </div>
 
+                            <p className="text-sm text-gray-600">
+                                Saat disimpan, backend akan mengambil semua order penawaran pada tanggal ini lalu
+                                menggabungkan barang yang sama ke daftar pembelanjaan.
+                            </p>
 
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    onClick={() => setOpenForm(false)}
+                                    className="px-4 py-2 bg-gray-200 rounded-md"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={() => void handleCreate()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
+                                >
+                                    {submitting ? "Menyimpan..." : "Simpan"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </Modal>
+                ) : null}
+            </AnimatePresence>
         </div>
     );
 }
 
+function Modal({
+    children,
+    onClose,
+}: {
+    children: React.ReactNode;
+    onClose: () => void;
+}) {
+    return (
+        <motion.div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+            onClick={onClose}
+        >
+            <div onClick={(e) => e.stopPropagation()}>{children}</div>
+        </motion.div>
+    );
+}

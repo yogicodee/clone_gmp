@@ -5,23 +5,21 @@ import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
+
 /* ================= HELPER ================= */
 const formatRupiah = (value: number | string) => {
     const number = Number(value || 0);
     return new Intl.NumberFormat("id-ID").format(number);
 };
 
-/* ================= DATA BARANG (SIMULASI API) ================= */
-const barangList = [
-    { nama: "Beras", harga: 12000 },
-    { nama: "Minyak Goreng", harga: 15000 },
-    { nama: "Gula", harga: 14000 },
-];
 
 /* ================= TYPE ================= */
 type Item = {
     id: number;
     nama_barang: string;
+    nama_gudang: string;
     qty: number;
     harga_satuan: number;
     total: number;
@@ -30,25 +28,12 @@ type Item = {
 type FormType = Omit<Item, "id" | "total">;
 
 export default function Page() {
-    const [data, setData] = useState<Item[]>([
-        {
-            id: 1,
-            nama_barang: "Beras",
-            qty: 10,
-            harga_satuan: 12000,
-            total: 120000,
-        },
-        {
-            id: 2,
-            nama_barang: "Minyak Goreng",
-            qty: 5,
-            harga_satuan: 15000,
-            total: 75000,
-        },
-    ]);
+    const { data, loading, refetch } = useFetch<Item>("/produk"); // Get Data via useFetch
+    const { data: barangData } = useFetch<any>("/produk");
 
     const [form, setForm] = useState<any>({
         nama_barang: "",
+        nama_gudang: "",
         qty: "",
         harga_satuan: "",
     });
@@ -114,6 +99,7 @@ export default function Page() {
     const resetForm = () => {
         setForm({
             nama_barang: "",
+            nama_gudang: "",
             qty: "",
             harga_satuan: "",
         });
@@ -205,6 +191,7 @@ export default function Page() {
                         <tr>
                             <th className="p-3">No</th>
                             <th className="p-3 text-left">Barang</th>
+                            <th className="p-3 text-left">Gudang</th>
                             <th className="p-3 text-left">Qty</th>
                             <th className="p-3 text-left">Harga</th>
                             <th className="p-3 text-left">Total</th>
@@ -217,6 +204,7 @@ export default function Page() {
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">{index + 1}</td>
                                 <td className="p-3">{item.nama_barang}</td>
+                                <td className="p-3">{item.nama_gudang}</td>
                                 <td className="p-3">{item.qty}</td>
                                 <td className="p-3">
                                     Rp {formatRupiah(item.harga_satuan)}

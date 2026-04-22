@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
+import { Pencil, Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -17,25 +19,28 @@ type Product = {
     nama_supplier: string;
 };
 
-type FormType = Omit<Product, "id" | "total_harga">;
+type FormType = {
+    gudang_id: number;
+    nama_barang: string;
+    nama_gudang: string;
+    kategori: string;
+    tanggal_masuk: string;
+    qty: number;
+    satuan: string;
+    harga_satuan: number;
+    nama_supplier: string;
+};
 
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        {
-            id: 1,
-            nama_barang: "Beras",
-            kategori: "Kering",
-            tanggal_masuk: "2026-04-01",
-            qty: 10,
-            satuan: "Kg",
-            harga_satuan: 12000,
-            total_harga: 120000,
-            nama_supplier: "PT Sumber Pangan",
-        },
-    ]);
+    const { data, loading, refetch } = useFetch<Product>("/inbound");
+    const { data: satuanData } = useFetch<any>("/kategori");
+    const { data: supplierData } = useFetch<any>("/supplier");
+    const { data: gudangData } = useFetch<any>("/gudang");
 
     const [form, setForm] = useState<FormType>({
+        gudang_id: 1,
         nama_barang: "",
+        nama_gudang: "",
         kategori: "",
         tanggal_masuk: "",
         qty: 0,
@@ -64,51 +69,63 @@ export default function Page() {
     };
 
     /* ================= HANDLE ================= */
-    const handleSubmit = () => {
-        if (!form.nama_barang) return;
-
-        const total = form.qty * form.harga_satuan;
-
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId
-                        ? { ...item, ...form, total_harga: total }
-                        : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                {
-                    id: Date.now(),
-                    ...form,
-                    total_harga: total,
-                },
-            ]);
+    const handleSubmit = async () => {
+        if (
+            !form.nama_barang ||
+            !form.kategori ||
+            !form.tanggal_masuk ||
+            form.qty <= 0 ||
+            !form.satuan ||
+            !form.nama_gudang ||
+            form.harga_satuan <= 0 ||
+            !form.nama_supplier
+        ) {
+            alert("Semua field wajib diisi dengan benar");
+            return;
         }
 
-        resetForm();
+        const payload = {
+            ...form,
+            kategori: form.kategori.toLowerCase(), // ✅ fix
+            total_harga: form.qty * form.harga_satuan,
+        };
+
+        try {
+            if (editId) {
+                await api.put(`/inbound/${editId}`, payload);
+            } else {
+                await api.post("/inbound", payload);
+            }
+
+            await refetch();
+            resetForm();
+        } catch (error: any) {
+            console.log("ERROR 422 =>", error.response?.data);
+        }
     };
 
     const handleEdit = (item: Product) => {
         const { id, total_harga, ...rest } = item;
-        setForm(rest);
-        setHargaInput(formatRupiah(rest.harga_satuan));
-        setQtyInput(String(rest.qty));
+        setForm({ ...rest, gudang_id: 1 });
         setEditId(id);
         setOpenForm(true);
     };
 
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/inbound/${deleteId}`);
+            await refetch();
             setDeleteId(null);
+        } catch (error: any) {
+            console.log("ERROR 422 =>", error.response?.data);
         }
     };
 
     const resetForm = () => {
         setForm({
+            gudang_id: 1,
             nama_barang: "",
             kategori: "",
             tanggal_masuk: "",
@@ -121,15 +138,6 @@ export default function Page() {
         setQtyInput("");
         setEditId(null);
         setOpenForm(false);
-    };
-
-    const handleSort = (field: keyof Product) => {
-        if (sortField === field) {
-            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-        } else {
-            setSortField(field);
-            setSortOrder("asc");
-        }
     };
 
     /* ================= FILTER ================= */
@@ -156,7 +164,6 @@ export default function Page() {
         return result;
     }, [data, search, sortField, sortOrder]);
 
-    /* ================= PAGINATION ================= */
     const totalPages = Math.ceil(filteredData.length / perPage);
 
     const paginatedData = filteredData.slice(
@@ -170,7 +177,6 @@ export default function Page() {
         if (currentPage > totalPages) setCurrentPage(1);
     }, [filteredData]);
 
-    const [btnPos, setBtnPos] = useState({ x: 0, y: 0 });
 
     return (
         <div className="p-6 space-y-6">
@@ -281,7 +287,7 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            {/* NAMA BARANG SELECT */}
+                            {/* NAMA BARANG */}
                             <select
                                 value={form.nama_barang}
                                 onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
@@ -293,16 +299,18 @@ export default function Page() {
                                 <option value="Gula">Gula</option>
                             </select>
 
+                            {/* KATEGORI */}
                             <select
                                 value={form.kategori}
                                 onChange={(e) => setForm({ ...form, kategori: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Kategori</option>
-                                <option value="Basah">Basah</option>
-                                <option value="Kering">Kering</option>
+                                <option value="basah">Basah</option>
+                                <option value="kering">Kering</option>
                             </select>
 
+                            {/* TANGGAL */}
                             <input
                                 type="date"
                                 value={form.tanggal_masuk}
@@ -310,6 +318,7 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
+                            {/* QTY */}
                             <input
                                 placeholder="Qty"
                                 value={qtyInput}
@@ -321,19 +330,21 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
+                            {/* SATUAN */}
                             <select
                                 value={form.satuan}
                                 onChange={(e) => setForm({ ...form, satuan: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Satuan</option>
-                                <option value="Kg">Kg</option>
-                                <option value="Gram">Gram</option>
-                                <option value="Liter">Liter</option>
-                                <option value="Pcs">Pcs</option>
-                                <option value="Box">Box</option>
+                                {satuanData.map((item: any) => (
+                                    <option key={item.id} value={item.nama_satuan}>
+                                        {item.nama_satuan}
+                                    </option>
+                                ))}
                             </select>
 
+                            {/* HARGA */}
                             <input
                                 placeholder="Harga Satuan"
                                 value={hargaInput}
@@ -345,17 +356,35 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             />
 
+                            {/* Gudang */}
+                            <select
+                                value={form.nama_gudang}
+                                onChange={(e) => setForm({ ...form, nama_gudang: e.target.value })}
+                                className="w-full border p-2 rounded-md"
+                            >
+                                <option value="">Pilih Supplier</option>
+                                {supplierData.map((item: any) => (
+                                    <option key={item.id} value={item.nama_gudang}>
+                                        {item.nama_gudang}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* SUPPLIER */}
                             <select
                                 value={form.nama_supplier}
                                 onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Supplier</option>
-                                <option value="PT Sumber Pangan">PT Sumber Pangan</option>
-                                <option value="PT Makmur Jaya">PT Makmur Jaya</option>
-                                <option value="CV Sejahtera">CV Sejahtera</option>
+                                {supplierData.map((item: any) => (
+                                    <option key={item.id} value={item.nama}>
+                                        {item.nama}
+                                    </option>
+                                ))}
                             </select>
 
+                            {/* BUTTON */}
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
                                     Batal

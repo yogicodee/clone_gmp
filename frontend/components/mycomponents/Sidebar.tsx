@@ -85,17 +85,9 @@ const menus = [
     key: "transaksipenjualan",
     children: [
       { icon: <CircleDollarSign size={16} />, label: "Penjualan", path: "/admin/transaksi-penjualan/penjualan" },
+      { icon: <Mails size={16} />, label: "Surat Jalan", path: "/admin/transaksi-penjualan/surat-jalan" },
+      { icon: <FileText size={16} />, label: "Tanda Terima", path: "/admin/transaksi-penjualan/tanda-terima" },
       { icon: <FileText size={16} />, label: "Invoice Penjualan", path: "/admin/transaksi-penjualan/invoice-penjualan" },
-
-    ],
-  },
-  {
-    label: "Logistik",
-    icon: <Forklift />,
-    key: "logistik",
-    children: [
-      { icon: <Hourglass size={16} />, label: "Jadwal Pengiriman", path: "/admin/logistik/jadwal-pengiriman" },
-      { icon: <Mails size={16} />, label: "Surat Jalan", path: "/admin/logistik/surat-jalan" },
     ],
   },
   {
@@ -124,11 +116,11 @@ export default function Sidebar({ open }: { open: boolean }) {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen text-gray-200 bg-primary/50 backdrop-blur-lg border-r transition-all duration-300 flex flex-col
+      className={`fixed top-0 left-0 h-screen text-gray-200 bg-primary/70 backdrop-blur-lg transition-all duration-300 flex flex-col
       ${open ? "w-64" : "w-20"}`}
     >
       {/* HEADER */}
-      <div className="h-16 flex items-center justify-center font-bold text-lg border-b text-gray-300">
+      <div className="h-16 flex items-center justify-center font-bold text-lg text-white">
         {open ? "Garuda Merah Putih" : "GMP"}
       </div>
 

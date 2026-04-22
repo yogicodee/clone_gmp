@@ -16,7 +16,7 @@ import {
 } from "@/lib/transaksiPembelian";
 
 type EditForm = {
-    supplier_id: number | "";
+    keterangan: string;
 };
 
 export default function Page() {
@@ -34,7 +34,9 @@ export default function Page() {
 
     const [search, setSearch] = useState("");
     const [editTarget, setEditTarget] = useState<DaftarPembelanjaanItem | null>(null);
-    const [form, setForm] = useState<EditForm>({ supplier_id: "" });
+    const [form, setForm] = useState<EditForm>({
+        keterangan: ""
+    });
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
@@ -83,8 +85,10 @@ export default function Page() {
 
             if (normalizedSearch) {
                 const match =
-                    item.nama_barang.toLowerCase().includes(normalizedSearch) ||
-                    (item.nama_supplier ?? "").toLowerCase().includes(normalizedSearch);
+                    item.nama_barang
+                        .toLowerCase()
+                        .includes(normalizedSearch) ||
+                            (item.nama_supplier ?? "").toLowerCase().includes(normalizedSearch);
 
                 if (!match) continue;
             }
@@ -127,7 +131,7 @@ export default function Page() {
     function openEditModal(item: DaftarPembelanjaanItem) {
         setEditTarget(item);
         setForm({
-            supplier_id: item.supplier_id ?? "",
+            keterangan: (item as any).keterangan || ""
         });
     }
 
@@ -159,9 +163,9 @@ export default function Page() {
                 }
             );
 
-            setSuccess("Supplier barang berhasil diperbarui.");
+            setSuccess("Keterangan berhasil diperbarui.");
             setEditTarget(null);
-            setForm({ supplier_id: "" });
+            setForm({ keterangan: "" });
             await fetchData();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -174,7 +178,7 @@ export default function Page() {
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-xl font-bold">Detail Order #{daftarPembelanjaanId}</h1>
+                    <h1 className="text-xl font-bold">Detail Surat Jalan #{daftarPembelanjaanId}</h1>
                     {detail ? (
                         <p className="text-sm text-gray-600 mt-1">{detail.tanggal_pesan}</p>
                     ) : null}
@@ -200,37 +204,46 @@ export default function Page() {
                 </div>
             ) : null}
 
-            <input
-                placeholder="Cari barang / supplier..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
-            />
+            <div className="flex items-center justify-between">
+
+                <input
+                    placeholder="Cari barang..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
+                />
+
+                <button
+
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
+                >
+                    Export PDF
+                </button>
+
+            </div>
 
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3 text-left">Barang</th>
+                            <th className="p-3 text-left">Nama Barang</th>
                             <th className="p-3">Qty</th>
                             <th className="p-3">Satuan</th>
-                            <th className="p-3">Stok</th>
-                            <th className="p-3">Kebutuhan</th>
-                            <th className="p-3 text-left">Supplier</th>
+                            <th className="p-3">Keterangan</th>
                             <th className="p-3">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                <td colSpan={6} className="p-6 text-center text-gray-500">
                                     Memuat data...
                                 </td>
                             </tr>
                         ) : paginatedItems.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                <td colSpan={6} className="p-6 text-center text-gray-500">
                                     Belum ada item daftar pembelanjaan.
                                 </td>
                             </tr>
@@ -246,9 +259,10 @@ export default function Page() {
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3 text-center">{item.qty}</td>
                                     <td className="p-3 text-center">{item.satuan}</td>
-                                    <td className="p-3 text-center">{item.stok}</td>
-                                    <td className="text-center"><p className="bg-yellow-500/30 text-yellow-700 py-0.5 font-semibold w-1/3 rounded-full mx-auto">{item.kebutuhan}</p></td>
-                                    <td className="p-3">{item.nama_supplier || "-"}</td>
+                                    <td className="p-3">
+                                        {(item as any).keterangan || "-"}
+                                    </td>
+
                                     <td className="p-3">
                                         <div className="flex justify-center">
                                             <button
@@ -303,63 +317,76 @@ export default function Page() {
                         }}
                     >
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-lg space-y-4">
-                            <h2 className="text-lg font-semibold">Pilih Supplier</h2>
+
+                            <h2 className="text-lg font-semibold">
+                                Edit Keterangan Barang
+                            </h2>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+
                                 <div>
                                     <p className="font-medium text-gray-600">Barang</p>
                                     <p>{editTarget.nama_barang}</p>
                                 </div>
+
                                 <div>
                                     <p className="font-medium text-gray-600">Qty</p>
                                     <p>{editTarget.qty}</p>
                                 </div>
+
                                 <div>
                                     <p className="font-medium text-gray-600">Satuan</p>
                                     <p>{editTarget.satuan}</p>
                                 </div>
-                                <div>
-                                    <p className="font-medium text-gray-600">Kebutuhan</p>
-                                    <p>{editTarget.kebutuhan}</p>
-                                </div>
+
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Supplier</label>
-                                <select
-                                    value={form.supplier_id}
+                                <label className="text-sm font-medium">
+                                    Keterangan
+                                </label>
+
+                                <input
+                                    value={form.keterangan}
                                     onChange={(e) =>
-                                        setForm({ supplier_id: e.target.value ? Number(e.target.value) : "" })
+                                        setForm({
+                                            keterangan: e.target.value
+                                        })
                                     }
                                     className="w-full border p-2 rounded-md"
-                                >
-                                    <option value="">Pilih Supplier</option>
-                                    {supplierOptions.map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.nama}
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder="Masukkan keterangan"
+                                />
+
                             </div>
 
                             <div className="flex justify-end gap-2">
                                 <button
                                     onClick={() => {
                                         setEditTarget(null);
-                                        setForm({ supplier_id: "" });
+                                        setForm({ keterangan: "" });
                                     }}
                                     className="px-4 py-2 bg-gray-200 rounded-md"
                                 >
                                     Batal
                                 </button>
+
                                 <button
-                                    onClick={() => void handleSubmit()}
-                                    disabled={submitting}
-                                    className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
+                                    onClick={() => {
+                                        setItems(prev =>
+                                            prev.map(it =>
+                                                it.id === editTarget.id
+                                                    ? { ...it, keterangan: form.keterangan } as any
+                                                    : it
+                                            )
+                                        );
+                                        setEditTarget(null);
+                                    }}
+                                    className="px-4 py-2 bg-blue-700 text-white rounded-md"
                                 >
-                                    {submitting ? "Menyimpan..." : "Simpan"}
+                                    Simpan
                                 </button>
                             </div>
+
                         </motion.div>
                     </Modal>
                 ) : null}

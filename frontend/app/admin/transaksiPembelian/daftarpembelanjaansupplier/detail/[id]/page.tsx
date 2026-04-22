@@ -1,241 +1,330 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-/* ================= TYPE ================= */
-type Item = {
-    id: number;
-    nama_barang: string;
-    qty: number;
-    satuan: string;
-    stok: number;
-    nama_supplier: string;
-    keterangan: string;
-};
+import api from "@/lib/api";
+import {
+    ApiDetailResponse,
+    ApiListResponse,
+    DaftarPembelanjaan,
+    DaftarPembelanjaanItem,
+    SupplierOption,
+    extractErrorMessage,
+} from "@/lib/transaksiPembelian";
 
+/* ================= PAGE ================= */
 export default function Page() {
+    const params = useParams<{ id: string }>();
     const router = useRouter();
-    const params = useParams();
+    const daftarPembelanjaanId = Number(params.id);
 
-    const [data] = useState<Item[]>([
-        {
-            id: 1,
-            nama_barang: "Beras",
-            qty: 10,
-            satuan: "Kg",
-            stok: 5,
-            nama_supplier: "PT Sumber Pangan",
-            keterangan: "",
-        },
-        {
-            id: 2,
-            nama_barang: "Minyak Goreng",
-            qty: 20,
-            satuan: "Liter",
-            stok: 10,
-            nama_supplier: "PT Sumber Pangan",
-            keterangan: "",
-        },
-        {
-            id: 3,
-            nama_barang: "Gula",
-            qty: 15,
-            satuan: "Kg",
-            stok: 8,
-            nama_supplier: "CV Makmur Jaya",
-            keterangan: "",
-        },
-    ]);
+    const [detail, setDetail] = useState<DaftarPembelanjaan | null>(null);
+    const [items, setItems] = useState<DaftarPembelanjaanItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const perPage = 10;
+
+    /* ================= FETCH ================= */
+    const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+
+    async function fetchData() {
+        try {
+            setLoading(true);
+            setError("");
+
+            const [detailRes, supplierRes] = await Promise.all([
+                api.get<ApiDetailResponse<DaftarPembelanjaan>>(
+                    `/daftar-pembelanjaan/${daftarPembelanjaanId}`
+                ),
+                api.get<ApiListResponse<SupplierOption>>("/supplier", {
+                    params: { per_page: 100 },
+                }),
+            ]);
+
+            const data = detailRes.data.data;
+
+            setDetail(data);
+            setItems(data.items ?? []);
+            setSupplierOptions(supplierRes.data.data ?? []);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const itemsWithSupplier = useMemo(() => {
+        return items.map((item) => {
+            const supplier = supplierOptions.find(
+                (s) => s.id === item.supplier_id
+            );
+
+            return {
+                ...item,
+                nama_supplier: supplier?.nama || "-",
+
+                qty: Number(item.qty) || 0,
+                stok: Number(item.stok) || 0,
+                kebutuhan: Number(item.kebutuhan) || 0,
+            };
+        });
+    }, [items, supplierOptions]);
+
+
+    useEffect(() => {
+        if (!Number.isNaN(daftarPembelanjaanId)) {
+            void fetchData();
+        }
+    }, [daftarPembelanjaanId]);
 
     /* ================= SUPPLIER LIST ================= */
     const suppliers = useMemo(() => {
-        return Array.from(
-            new Map(data.map((item) => [item.nama_supplier, item])).values()
-        );
-    }, [data]);
+        const map = new Map<string, { nama_supplier: string }>();
 
-    const [selectedSupplier, setSelectedSupplier] = useState<string | null>(
-        suppliers[0]?.nama_supplier || null
+        itemsWithSupplier.forEach((item) => {
+            if (item.nama_supplier && !map.has(item.nama_supplier)) {
+                map.set(item.nama_supplier, {
+                    nama_supplier: item.nama_supplier,
+                });
+            }
+        });
+
+        return Array.from(map.values());
+    }, [itemsWithSupplier]);
+
+    /* ================= DEFAULT SUPPLIER ================= */
+    useEffect(() => {
+        if (suppliers.length > 0 && !selectedSupplier) {
+            setSelectedSupplier(suppliers[0].nama_supplier);
+        }
+    }, [suppliers, selectedSupplier]);
+
+    /* ================= FILTER + KEBUTUHAN ================= */
+    const filteredItems = useMemo(() => {
+        return itemsWithSupplier.filter((item) => {
+            if (!selectedSupplier) return true;
+            return item.nama_supplier === selectedSupplier;
+        });
+    }, [itemsWithSupplier, selectedSupplier]);
+
+    /* ================= PAGINATION ================= */
+    const totalPages = Math.max(1, Math.ceil(filteredItems.length / perPage));
+
+    const paginatedItems = filteredItems.slice(
+        (currentPage - 1) * perPage,
+        currentPage * perPage
     );
 
-    /* ================= FILTER DATA ================= */
-    const detailData = useMemo(() => {
-        return data.filter(
-            (item) => item.nama_supplier === selectedSupplier
-        );
-    }, [data, selectedSupplier]);
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(1);
+        }
+    }, [currentPage, totalPages]);
 
-    /* ================= KEBUTUHAN AUTO CALC ================= */
-    const detailDataWithKebutuhan = useMemo(() => {
-        return detailData.map((item) => ({
-            ...item,
-            kebutuhan: Math.max(item.qty - item.stok, 0),
-        }));
-    }, [detailData]);
+    console.log(items[0]);
 
-    /* ================= EXPORT PDF ================= */
-    const handleExportPDF = () => {
-        if (!selectedSupplier) return;
-
+    // Export PDF
+    function handleExportPDF() {
         const doc = new jsPDF();
 
-        doc.setFontSize(14);
-        doc.text(`Detail Supplier: ${selectedSupplier}`, 14, 15);
+        const title = `Detail Pembelanjaan #${daftarPembelanjaanId}`;
+        const tanggal = detail?.tanggal_pesan
+            ? new Date(detail.tanggal_pesan).toLocaleDateString("id-ID")
+            : "-";
 
-        doc.setFontSize(10);
-        doc.text(
-            `Tanggal: ${new Date().toLocaleDateString("id-ID")}`,
-            14,
-            22
-        );
+        doc.setFontSize(14);
+        doc.text(title, 14, 15);
+        doc.setFontSize(11);
+        doc.text(`Tanggal Pesan: ${tanggal}`, 14, 22);
+        doc.text(`Supplier: ${selectedSupplier ?? "Semua"}`, 14, 28);
+
+        const tableData = filteredItems.map((item, index) => [
+            index + 1,
+            item.nama_barang,
+            item.qty,
+            item.satuan,
+            item.stok,
+            item.kebutuhan,
+        ]);
 
         autoTable(doc, {
-            startY: 28,
-            head: [["No", "Barang", "Qty Pesanan", "Satuan", "Stok", "Kebutuhan", "Keterangan"]],
-            body: detailDataWithKebutuhan.map((item, index) => [
-                index + 1,
-                item.nama_barang,
-                item.qty,
-                item.satuan,
-                item.stok,
-                item.kebutuhan,
-                item.keterangan,
-            ]),
-
+            startY: 35,
+            head: [
+                ["No", "Nama Barang", "Qty", "Satuan", "Stok", "Kebutuhan"],
+            ],
+            body: tableData,
+            // 🔥 HEADER MERAH
             headStyles: {
-                fillColor: [163, 29, 29], // #A31D1D
-                textColor: 255,
+                fillColor: [220, 38, 38], // merah (Tailwind red-600)
+                textColor: 255, // putih
                 fontStyle: "bold",
-                halign: "center",
             },
 
-            bodyStyles: {
-                halign: "center",
+            // optional: biar lebih rapi
+            styles: {
+                fontSize: 10,
             },
         });
 
-        doc.save(`detail-${selectedSupplier}.pdf`);
-    };
+        doc.save(`pembelanjaan-${daftarPembelanjaanId}.pdf`);
+    }
 
+    /* ================= RENDER ================= */
     return (
         <div className="p-6 space-y-4">
 
             {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">
-                    Detail Order #{params?.id}
-                </h1>
+                <div>
+                    <h1 className="text-2xl font-bold">
+                        Detail Order #{params?.id}
+                    </h1>
+
+                    {/* ✅ TANGGAL DARI TABEL */}
+                    <p className="text-sm text-gray-600">
+                        Tanggal Pesan:{" "}
+                        <span className="font-semibold">
+                            {detail?.tanggal_pesan
+                                ? new Date(detail.tanggal_pesan).toLocaleDateString("id-ID")
+                                : "-"}
+                        </span>
+                    </p>
+                </div>
 
                 <button
                     onClick={() => router.back()}
-                    className="px-4 py-2 bg-white rounded-md"
+                    className="px-4 py-2 bg-white rounded-md shadow"
                 >
                     Kembali
                 </button>
             </div>
 
-            {/* TITLE + EXPORT */}
-            <div className="flex justify-end items-center mb-3">
-                <button
-                    onClick={handleExportPDF}
-                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                    Export PDF
-                </button>
-            </div>
+            {error && (
+                <div className="bg-red-100 text-red-700 p-3 rounded-md">
+                    {error}
+                </div>
+            )}
 
             {/* LAYOUT */}
             <div className="grid grid-cols-3 gap-4">
 
-                {/* LEFT */}
-                <div className="col-span-1 bg-white/70 backdrop-blur-lg rounded-lg shadow p-4">
+                {/* LEFT: SUPPLIER */}
+                <div className="col-span-1 bg-white rounded-lg shadow p-4">
+
                     <h2 className="font-semibold mb-3">Supplier</h2>
 
                     <div className="space-y-2">
                         {suppliers.map((sup) => (
                             <div
                                 key={sup.nama_supplier}
-                                onClick={() =>
-                                    setSelectedSupplier(sup.nama_supplier)
-                                }
+                                onClick={() => setSelectedSupplier(sup.nama_supplier)}
                                 className={`p-3 rounded-md cursor-pointer border ${selectedSupplier === sup.nama_supplier
-                                    ? "bg-lime-200/70 border-white"
-                                    : "hover:bg-gray-200"
+                                    ? "bg-lime-200 border-green-500"
+                                    : "hover:bg-gray-100"
                                     }`}
                             >
-                                <p className="font-medium">
-                                    {sup.nama_supplier}
-                                </p>
+                                {sup.nama_supplier}
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* RIGHT */}
-                <div className="col-span-2 bg-white/70 backdrop-blur-lg rounded-lg shadow p-4">
-                    <h2 className="font-semibold mb-3">
-                        Detail Barang ({selectedSupplier})
-                    </h2>
+                {/* RIGHT: TABLE */}
+                <div className="col-span-2 bg-white rounded-lg shadow p-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-semibold mb-3">
+                            Detail Barang ({selectedSupplier ?? "Semua"})
+                        </h2>
+                        <button
+                            onClick={handleExportPDF}
+                            className="px-4 py-2 bg-green-600 text-xs font-semibold text-white rounded-md hover:bg-green-700"
+                        >
+                            Export PDF
+                        </button>
+                    </div>
 
                     <table className="w-full text-sm">
-                        <thead className="bg-white shadow-lg sticky top-0">
+                        <thead className="bg-gray-100">
                             <tr>
                                 <th className="p-2">No</th>
                                 <th className="p-2 text-left">Barang</th>
-                                <th className="p-2">Qty Pesanan</th>
+                                <th className="p-2">Qty</th>
                                 <th className="p-2">Satuan</th>
                                 <th className="p-2">Stok</th>
                                 <th className="p-2">Kebutuhan</th>
-                                <th className="p-2">Keterangan</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            {detailDataWithKebutuhan.map((item, index) => (
-                                <tr key={item.id} className="border-t">
-                                    <td className="p-2 text-center">
-                                        {index + 1}
-                                    </td>
-                                    <td className="p-2">
-                                        {item.nama_barang}
-                                    </td>
-                                    <td className="p-2 text-center">
-                                        {item.qty}
-                                    </td>
-                                    <td className="p-2 text-center">
-                                        {item.satuan}
-                                    </td>
-                                    <td className="p-2 text-center">
-                                        {item.stok}
-                                    </td>
-                                    <td className="p-2 text-center">
-                                        {item.kebutuhan}
-                                    </td>
-                                    <td className="p-2 text-center">
-
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={6} className="p-4 text-center">
+                                        Loading...
                                     </td>
                                 </tr>
-                            ))}
-
-                            {detailDataWithKebutuhan.length === 0 && (
+                            ) : paginatedItems.length === 0 ? (
                                 <tr>
-                                    <td
-                                        colSpan={6}
-                                        className="text-center p-4"
-                                    >
+                                    <td colSpan={6} className="p-4 text-center">
                                         Tidak ada data
                                     </td>
                                 </tr>
+                            ) : (
+                                paginatedItems.map((item, index) => (
+                                    <tr key={item.id} className="border-t">
+                                        <td className="p-2 text-center">
+                                            {(currentPage - 1) * perPage + index + 1}
+                                        </td>
+                                        <td className="p-2">{item.nama_barang}</td>
+                                        <td className="p-2 text-center">{item.qty}</td>
+                                        <td className="p-2 text-center">{item.satuan}</td>
+                                        <td className="p-2 text-center">{item.stok}</td>
+                                        <td className="p-2 text-center">
+                                            {item.kebutuhan}
+                                        </td>
+                                    </tr>
+                                ))
                             )}
                         </tbody>
                     </table>
+
+                    {/* PAGINATION */}
+                    <div className="flex justify-end gap-2 mt-4">
+                        <button
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage((prev) => prev - 1)}
+                            className="px-3 py-1 border rounded-md disabled:opacity-50"
+                        >
+                            Prev
+                        </button>
+
+                        {Array.from({ length: totalPages }, (_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => setCurrentPage(i + 1)}
+                                className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-blue-500 text-white" : ""
+                                    }`}
+                            >
+                                {i + 1}
+                            </button>
+                        ))}
+
+                        <button
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage((prev) => prev + 1)}
+                            className="px-3 py-1 border rounded-md disabled:opacity-50"
+                        >
+                            Next
+                        </button>
+                    </div>
                 </div>
-
-
             </div>
         </div>
     );
