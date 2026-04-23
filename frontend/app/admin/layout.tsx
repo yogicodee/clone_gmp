@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <Header onToggle={() => setOpen(!open)} />
 
         {/* CONTENT */}
-        <main className="h-[calc(100vh-64px)] overflow-y-auto p-6 bg-transparent">
+        <main className="h-[calc(100vh-64px)] overflow-y-auto p-2 bg-transparent">
           {children}
         </main>
       </div>

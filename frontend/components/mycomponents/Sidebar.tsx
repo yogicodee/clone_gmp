@@ -117,7 +117,7 @@ export default function Sidebar({ open }: { open: boolean }) {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen text-gray-200 bg-primary/70 backdrop-blur-lg transition-all duration-300 flex flex-col
+      className={`fixed top-0 left-0 h-screen text-gray-200 bg-primary backdrop-blur-lg transition-all duration-300 flex flex-col
       ${open ? "w-64" : "w-20"}`}
     >
       {/* HEADER */}

@@ -1,333 +1,463 @@
 "use client";
 
-import {
-  Home,
-  ShoppingCart,
-  FileText,
-  Bell,
-  Settings,
-  User,
-  Package,
-  Truck,
-  Users,
-  UserCheck,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+
+import LineChart from "@/components/mycomponents/chart/LineChart";
+import BarChart from "@/components/mycomponents/chart/BarChart";
+import PieChart from "@/components/mycomponents/chart/PieChart";
 
 import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card";
 
+import { Button } from "@/components/ui/button";
+
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-} from "recharts";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import {
-  motion,
-  useMotionValue,
-  useTransform,
-  animate,
-} from "framer-motion";
-import { useEffect } from "react";
+  MoreVertical,
+  ShoppingBag,
+  Package,
+  RotateCcw,
+  DollarSign,
+  Wallet,
+  BadgePercent,
+} from "lucide-react";
 
-/* ================= DATA ================= */
-const lineData = [
-  { name: "10am", value: 40 },
-  { name: "11am", value: 20 },
-  { name: "12pm", value: 35 },
-  { name: "01pm", value: 60 },
-  { name: "02pm", value: 30 },
-  { name: "03pm", value: 55 },
+const stats = [
+  {
+    title: "Omset Hari Ini",
+    value: "2341+",
+    percent: 80,
+    color: "text-blue-500",
+    stroke: "stroke-blue-500",
+    bg: "bg-blue-100",
+    icon: ShoppingBag,
+  },
+  {
+    title: "Pengeluaran",
+    value: "178+",
+    percent: 30,
+    color: "text-green-500",
+    stroke: "stroke-green-500",
+    bg: "bg-green-100",
+    icon: Package,
+  },
+  {
+    title: "Keuntungan",
+    value: "67+",
+    percent: 20,
+    color: "text-red-500",
+    stroke: "stroke-red-500",
+    bg: "bg-red-100",
+    icon: RotateCcw,
+  },
+  {
+    title: "Saldo Bank",
+    value: "890+",
+    percent: 65,
+    color: "text-purple-500",
+    stroke: "stroke-purple-500",
+    bg: "bg-purple-100",
+    icon: DollarSign,
+  },
+  {
+    title: "Piutang",
+    value: "540+",
+    percent: 55,
+    color: "text-orange-500",
+    stroke: "stroke-orange-500",
+    bg: "bg-orange-100",
+    icon: Wallet,
+  },
+  {
+    title: "Hutang",
+    value: "320+",
+    percent: 40,
+    color: "text-yellow-500",
+    stroke: "stroke-yellow-500",
+    bg: "bg-yellow-100",
+    icon: Package,
+  },
+  {
+    title: "Margin %",
+    value: "28%",
+    percent: 28,
+    color: "text-emerald-500",
+    stroke: "stroke-emerald-500",
+    bg: "bg-emerald-100",
+    icon: BadgePercent,
+  },
 ];
 
-const pieData = [
-  { name: "Sale", value: 70 },
-  { name: "Return", value: 20 },
-  { name: "Distribute", value: 10 },
-];
+function ProgressCircle({
+  percent,
+  color,
+}: {
+  percent: number;
+  color: string;
+}) {
 
-const barData = [
-  { name: "Sun", value: 40 },
-  { name: "Mon", value: 60 },
-  { name: "Tue", value: 30 },
-  { name: "Wed", value: 80 },
-  { name: "Thu", value: 50 },
-];
+  const radius = 22;
+  const circumference = 2 * Math.PI * radius;
 
-/* ================= FORMAT ================= */
-const formatNumber = (val: number) =>
-  new Intl.NumberFormat("id-ID").format(val);
-
-/* ================= COMPONENT ================= */
-function StatCard({ title, value, icon: Icon, gradient }: any) {
-  const count = useMotionValue(0);
-  const rounded = useTransform(count, (latest) =>
-    Math.floor(latest)
-  );
-
-  useEffect(() => {
-    const controls = animate(count, value, {
-      duration: 1.2,
-      ease: "easeOut",
-    });
-
-    return controls.stop;
-  }, [value]);
+  const offset =
+    circumference - (percent / 100) * circumference;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.4 }}
-    >
-      <Card className={`text-white rounded-2xl ${gradient}`}>
-        <CardContent className="p-4 flex flex-col gap-3">
+    <div className="relative h-16 w-16">
+      <svg
+        width="64"
+        height="64"
+        className="rotate-[-90deg]"
+      >
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          strokeWidth="6"
+          className="stroke-muted"
+          fill="none"
+        />
 
-          {/* ICON + TITLE */}
-          <div className="bg-white/20 p-2 rounded-lg flex items-center gap-2 justify-center">
-            <Icon size={20} />
-            <p className="text-base opacity-80">{title}</p>
-          </div>
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          strokeWidth="6"
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className={color}
+        />
+      </svg>
 
-          {/* VALUE (ANIMATED) */}
-          <motion.p className="text-3xl font-bold text-center">
-            {rounded}
-          </motion.p>
+      <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold">
+        {percent}%
+      </span>
 
-        </CardContent>
-      </Card>
-    </motion.div>
+    </div>
   );
 }
 
-
-
-const COLORS = ["#3b82f6", "#22c55e", "#ef4444"]; // biru, hijau, merah
-
-const orders = [
-  {
-    id: "#9812",
-    product: "Air Vapormax",
-    status: "Complete",
-    price: 22500,
-  },
-  {
-    id: "#9813",
-    product: "Nike Air Force",
-    status: "Pending",
-    price: 18000,
-  },
-  {
-    id: "#9814",
-    product: "Air Vapormax",
-    status: "Complete",
-    price: 22500,
-  },
-  {
-    id: "#9815",
-    product: "Nike Air Force",
-    status: "Pending",
-    price: 18000,
-  },
-  {
-    id: "#9816",
-    product: "Air Vapormax",
-    status: "Complete",
-    price: 22500,
-  },
-  {
-    id: "#9817",
-    product: "Nike Air Force",
-    status: "Pending",
-    price: 18000,
-  },
-  {
-    id: "#9818",
-    product: "Air Vapormax",
-    status: "Complete",
-    price: 22500,
-  },
-  {
-    id: "#9819",
-    product: "Nike Air Force",
-    status: "Pending",
-    price: 18000,
-  },
-  {
-    id: "#9820",
-    product: "Air Vapormax",
-    status: "Complete",
-    price: 22500,
-  },
-];
-
-const formatRupiah = (number: number) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(number);
-};
-
-/* ================= PAGE ================= */
 export default function Dashboard() {
-  return (
-    <div className="flex min-h-screen bg-white/40 backdrop-blur-2xl rounded-2xl border border-white">
 
-      {/* MAIN */}
-      <main className="flex-1 p-6 space-y-6">
+  const [nama, setNama] = useState("");
+
+  useEffect(() => {
+
+    const user = localStorage.getItem("user");
+
+    if (user) {
+      try {
+        const parsed = JSON.parse(user);
+        setNama(parsed.nama || parsed.name || "User");
+      } catch {
+        setNama("User");
+      }
+    }
+
+  }, []);
+
+  const getGreeting = () => {
+
+    const hour = new Date().getHours();
+
+    if (hour >= 5 && hour < 12) return "☀️ Good Morning";
+    if (hour >= 12 && hour < 18) return "🌤️ Good Afternoon";
+    if (hour >= 18 && hour < 22) return "🌙 Good Evening";
+
+    return "😴 Good Night";
+
+  };
+
+  return (
+    <div className="flex min-h-screen">
+
+      <main className="flex-1 p-6 space-y-6 bg-white/30 backdrop-blur-2xl rounded-3xl border border-white">
 
         {/* HEADER */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">
-              Dashboard Garuda Merah Putih
+              {getGreeting()}, {nama}
             </h1>
+
             <p className="text-sm text-muted-foreground">
-              Ringkasan performa penjualan
+              Ringkasan performa keuangan koperasi
             </p>
+
           </div>
-          <div className="text-sm text-muted-foreground">
-            April 2026
-          </div>
+
+          <Button variant="outline">
+            Bulan Ini
+          </Button>
+
         </div>
+
 
         {/* KPI */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatCard title="Produk Basah" value={120} icon={Package} gradient="bg-gradient-to-br from-lime-500 to-lime-200" />
-          <StatCard title="Produk Kering" value={80} icon={Package} gradient="bg-gradient-to-br from-teal-500 to-teal-200" />
-          <StatCard title="Supplier" value={25} icon={Truck} gradient="bg-gradient-to-br from-slate-500 to-slate-200" />
-          <StatCard title="Kendaraan" value={10} icon={Truck} gradient="bg-gradient-to-br from-rose-500 to-rose-200" />
-          <StatCard title="Karyawan" value={45} icon={Users} gradient="bg-gradient-to-br from-indigo-500 to-indigo-200" />
-          <StatCard title="Mitra" value={18} icon={UserCheck} gradient="bg-gradient-to-br from-zinc-500 to-zinc-200" />
-        </div>
+        <div className="grid grid-cols-12 gap-5">
 
-        {/* CONTENT */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {stats.map((item, index) => {
 
-          {/* LEFT */}
-          <div className="lg:col-span-3 space-y-6">
+            const Icon = item.icon
 
-            {/* LINE */}
-            <Card className="bg-gradient-to-t from-blue-950 via-blue-950 to-zinc-900">
-              <CardHeader>
-                <CardTitle className="text-white">Sales Reports</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={lineData}>
-                    <XAxis dataKey="name" stroke="#ffffff" />
-                    <YAxis stroke="#ffffff" />
-                    <Tooltip />
-                    <Line dataKey="value" stroke="#ffffff" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            const bottomRow = index >= 4
 
-            {/* TABLE */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Order</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <table className="w-full text-sm">
-                  <thead className="text-gray-500">
-                    <tr className="text-left">
-                      <th>ID</th>
-                      <th>Product</th>
-                      <th>Status</th>
-                      <th>Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.id}</td>
-                        <td>{item.product}</td>
-                        <td
-                          className={
-                            item.status === "Complete"
-                              ? "text-green-500"
-                              : "text-primary"
-                          }
-                        >
-                          {item.status}
-                        </td>
-                        <td>{formatRupiah(item.price)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
+            return (
+              <Card
+                key={index}
+                className={`
+rounded-2xl bg-white backdrop-blur-2xl
+col-span-12
+md:col-span-6
+${bottomRow
+                    ? "xl:col-span-4"
+                    : "xl:col-span-3"}
 
-          </div>
+`}
+              >
 
-          {/* RIGHT */}
-          <div className="lg:col-span-2 space-y-6">
+                <CardContent className="p-5">
 
-            {/* PIE */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sales Reports</CardTitle>
-              </CardHeader>
-              <CardContent className="relative flex justify-center items-center">
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      innerRadius={50}
-                      outerRadius={80}
+                  <div className="flex items-start justify-between mb-5">
+
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center ${item.bg}`}
                     >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+                      <Icon className={`w-5 h-5 ${item.color}`} />
+                    </div>
 
-                {/* CENTER TEXT */}
-                <div className="absolute text-xl font-bold">
-                  70%
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* BAR */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Analytics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={barData}>
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#facc15" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button>
+                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
 
-          </div>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem>Harian</DropdownMenuItem>
+                        <DropdownMenuItem>Bulanan</DropdownMenuItem>
+                        <DropdownMenuItem>Tahunan</DropdownMenuItem>
+                      </DropdownMenuContent>
+
+                    </DropdownMenu>
+
+                  </div>
+
+
+
+                  <div className="flex justify-between items-center">
+
+                    <div>
+                      <h2 className="text-3xl font-bold">
+                        {item.value}
+                      </h2>
+
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {item.title}
+                      </p>
+
+                    </div>
+
+                    <ProgressCircle
+                      percent={item.percent}
+                      color={item.stroke}
+                    />
+
+                  </div>
+
+                </CardContent>
+              </Card>
+            )
+
+          })}
 
         </div>
+
+
+
+        {/* MAIN ANALYTICS */}
+        <div className="grid gap-6 lg:grid-cols-2">
+
+          {/* Cashflow / Omset Trend */}
+          <Card className="rounded-2xl shadow-sm border-0">
+            <CardHeader>
+              <CardTitle>Cashflow & Omset Trend</CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              <LineChart />
+            </CardContent>
+          </Card>
+
+
+          {/* Penjualan Per SPPG */}
+          <Card className="rounded-2xl shadow-sm border-0">
+            <CardHeader>
+              <CardTitle>Penjualan per SPPG</CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              <PieChart />
+            </CardContent>
+
+          </Card>
+
+        </div>
+
+
+
+
+        {/* SECONDARY */}
+        <div className="grid gap-6 lg:grid-cols-4">
+
+          {/* BEBAN */}
+          <Card className="rounded-2xl shadow-sm border-0 lg:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle>Beban Operasional Analysis</CardTitle>
+            </CardHeader>
+
+            <CardContent className="pt-2">
+              <BarChart />
+            </CardContent>
+
+          </Card>
+
+
+
+          {/* PIUTANG AGING */}
+          <Card className="rounded-2xl bg-white">
+
+            <CardHeader className="pb-2">
+              <CardTitle>Piutang Aging</CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-4 pt-2">
+
+              <div className="rounded-xl bg-muted/50 p-4 flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    0-30 Hari
+                  </p>
+                  <h4 className="font-semibold text-lg">
+                    120 Jt
+                  </h4>
+                </div>
+
+                <span className="text-green-600 text-sm font-medium">
+                  Lancar
+                </span>
+              </div>
+
+
+
+              <div className="rounded-xl bg-muted/50 p-4 flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    31-60 Hari
+                  </p>
+                  <h4 className="font-semibold text-lg">
+                    48 Jt
+                  </h4>
+                </div>
+
+                <span className="text-yellow-600 text-sm font-medium">
+                  Warning
+                </span>
+
+              </div>
+
+
+
+              <div className="rounded-xl bg-muted/50 p-4 flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    61+ Hari
+                  </p>
+                  <h4 className="font-semibold text-lg">
+                    12 Jt
+                  </h4>
+                </div>
+
+                <span className="text-red-600 text-sm font-medium">
+                  Overdue
+                </span>
+
+              </div>
+
+            </CardContent>
+
+          </Card>
+
+
+
+
+          {/* ASSET */}
+          <Card className="rounded-2xl bg-linear-150 from-blue-800 to-blue-950 backdrop-blur-2xl text-white">
+
+            <CardHeader className="pb-2">
+              <CardTitle>Asset / Persediaan</CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-5 pt-2">
+
+              <div className="rounded-xl bg-muted/50 p-4">
+                <p className="text-sm text-white/70">
+                  Total Asset
+                </p>
+
+                <h3 className="text-2xl font-bold mt-2">
+                  Rp 250.000.000
+                </h3>
+              </div>
+
+
+              <div className="rounded-xl bg-muted/50 p-4">
+                <p className="text-sm text-white/70">
+                  Jumlah SKU
+                </p>
+
+                <h3 className="text-2xl font-bold mt-2">
+                  148
+                </h3>
+              </div>
+
+
+              <div className="rounded-xl bg-muted/50 p-4">
+                <p className="text-sm text-white/70">
+                  Dead Stock
+                </p>
+
+                <h3 className="text-2xl font-bold mt-2">
+                  6 Item
+                </h3>
+              </div>
+
+            </CardContent>
+
+          </Card>
+
+        </div>
+
+
+
+
+
+
       </main>
     </div>
-  );
+  )
+
 }
