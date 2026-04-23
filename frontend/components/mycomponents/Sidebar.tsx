@@ -33,6 +33,7 @@ import {
   Hourglass,
   Mails,
   Building,
+  Handbag,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
@@ -59,16 +60,6 @@ const menus = [
     ],
   },
   {
-    label: "Transaksi Pembelian",
-    icon: <ArrowLeftRight />,
-    key: "pembelian",
-    children: [
-      { icon: <ClipboardList size={16} />, label: "List Order & Penawaran", path: "/admin/transaksiPembelian/listorderpenawaran" },
-      { icon: <BaggageClaim size={16} />, label: "Daftar Pembelanjaan", path: "/admin/transaksiPembelian/daftarpembelanjaan" },
-      { icon: <ScrollText size={16} />, label: "Daftar Pembelanjaan Supplier", path: "/admin/transaksiPembelian/daftarpembelanjaansupplier" },
-    ],
-  },
-  {
     label: "Warehouse System",
     icon: <Warehouse />,
     key: "warehouse",
@@ -80,6 +71,16 @@ const menus = [
     ],
   },
   {
+    label: "Transaksi Pembelian",
+    icon: <ArrowLeftRight />,
+    key: "pembelian",
+    children: [
+      { icon: <ClipboardList size={16} />, label: "List Order & Penawaran", path: "/admin/transaksiPembelian/listorderpenawaran" },
+      { icon: <BaggageClaim size={16} />, label: "Daftar Pembelanjaan", path: "/admin/transaksiPembelian/daftarpembelanjaan" },
+      { icon: <Handbag size={16} />, label: "Daftar Pembelanjaan Supplier", path: "/admin/transaksiPembelian/daftarpembelanjaansupplier" },
+    ],
+  },
+  {
     label: "Transaksi Penjualan",
     icon: <ShoppingCart />,
     key: "transaksipenjualan",
@@ -87,7 +88,7 @@ const menus = [
       { icon: <CircleDollarSign size={16} />, label: "Penjualan", path: "/admin/transaksi-penjualan/penjualan" },
       { icon: <Mails size={16} />, label: "Surat Jalan", path: "/admin/transaksi-penjualan/surat-jalan" },
       { icon: <FileText size={16} />, label: "Tanda Terima", path: "/admin/transaksi-penjualan/tanda-terima" },
-      { icon: <FileText size={16} />, label: "Invoice Penjualan", path: "/admin/transaksi-penjualan/invoice-penjualan" },
+      { icon: <ScrollText size={16} />, label: "Invoice Penjualan", path: "/admin/transaksi-penjualan/invoice-penjualan" },
     ],
   },
   {

@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 /* ================= TYPE ================= */
 type Product = {
   id: number;
-  nomor_surat_jalan: string;
+  nama_akuntan: string;
   nama_sppg: string;
   tanggal: string;
   no_po: string;
@@ -54,7 +54,7 @@ export default function Page() {
   const [data, setData] = useState<Product[]>([
     {
       id: 1,
-      nomor_surat_jalan: "SJ-001",
+      nama_akuntan: "Tanti Dwi",
       nama_sppg: "SPPG Surabaya",
       tanggal: "2026-04-22",
       no_po: "PO-001",
@@ -65,7 +65,7 @@ export default function Page() {
   ]);
 
   const [form, setForm] = useState<FormType>({
-    nomor_surat_jalan: "",
+    nama_akuntan: "",
     nama_sppg: "",
     tanggal: "",
     no_po: "",
@@ -85,7 +85,7 @@ export default function Page() {
   /* ================= SORT ================= */
 
   const [sortField, setSortField] =
-    useState<keyof Product>("nomor_surat_jalan");
+    useState<keyof Product>("nama_akuntan");
 
   const [sortOrder, setSortOrder] =
     useState<"asc" | "desc">("asc");
@@ -102,7 +102,7 @@ export default function Page() {
   const handleSubmit = () => {
 
     if (
-      !form.nomor_surat_jalan ||
+      !form.nama_akuntan ||
       !form.nama_sppg ||
       !form.tanggal ||
       !form.no_po ||
@@ -154,7 +154,7 @@ export default function Page() {
 
   const resetForm = () => {
     setForm({
-      nomor_surat_jalan: "",
+      nama_akuntan: "",
       nama_sppg: "",
       tanggal: "",
       no_po: "",
@@ -207,7 +207,7 @@ export default function Page() {
 
     if (search) {
       result = result.filter(item =>
-        item.nomor_surat_jalan
+        item.nama_akuntan
           .toLowerCase()
           .includes(search.toLowerCase()) ||
 
@@ -294,17 +294,16 @@ export default function Page() {
             <tr>
 
               <th className="p-3">No</th>
+              <th className="p-3">No PO</th>
 
               <th className="p-3">
-                <button onClick={() => handleSort("nomor_surat_jalan")} className="flex items-center gap-2">
-                  No Surat Jalan
+                <button onClick={() => handleSort("nama_akuntan")} className="flex items-center gap-2">
+                  Nama Akuntan
                   <ArrowUpDown size={14} />
                 </button>
               </th>
-
               <th className="p-3">SPPG</th>
               <th className="p-3">Tanggal</th>
-              <th className="p-3">No PO</th>
               <th className="p-3">Armada</th>
               <th className="p-3">No Pol</th>
               <th className="p-3">Driver</th>
@@ -329,10 +328,10 @@ export default function Page() {
                   {(currentPage - 1) * perPage + index + 1}
                 </td>
 
-                <td className="p-3">{item.nomor_surat_jalan}</td>
+                <td className="p-3">{item.no_po}</td>
+                <td className="p-3">{item.nama_akuntan}</td>
                 <td className="p-3">{item.nama_sppg}</td>
                 <td className="p-3">{item.tanggal}</td>
-                <td className="p-3">{item.no_po}</td>
                 <td className="p-3">{item.armada}</td>
                 <td className="p-3">{item.no_pol}</td>
                 <td className="p-3">{item.nama_driver}</td>
@@ -388,11 +387,11 @@ export default function Page() {
 
               <input
                 placeholder="Nomor Surat Jalan"
-                value={form.nomor_surat_jalan}
+                value={form.nama_akuntan}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    nomor_surat_jalan: e.target.value
+                    nama_akuntan: e.target.value
                   })
                 }
                 className="w-full border p-2 rounded-md"
