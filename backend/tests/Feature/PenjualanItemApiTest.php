@@ -1,0 +1,136 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Gudang;
+use App\Models\OrderPenawaran;
+use App\Models\Penjualan;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class PenjualanItemApiTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_opsi_barang_only_returns_items_with_same_shipping_date(): void
+    {
+        $penjualan = Penjualan::query()->create([
+            'kode_penjualan' => 'TRX-001',
+            'tanggal' => '2026-04-25',
+            'status' => 'draft',
+            'total_harga' => 0,
+        ]);
+
+        $orderMatch = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-20',
+            'tanggal_dikirim' => '2026-04-25',
+            'nama_pembeli' => 'SPPG A',
+            'keterangan' => 'Sama tanggal kirim',
+        ]);
+
+        $orderOther = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-21',
+            'tanggal_dikirim' => '2026-04-26',
+            'nama_pembeli' => 'SPPG B',
+            'keterangan' => 'Tanggal beda',
+        ]);
+
+        $orderMatch->items()->create([
+            'nama_barang' => 'Pasir',
+            'qty' => 5,
+            'satuan' => 'Kg',
+            'harga_satuan' => 12000,
+            'keterangan' => 'Masuk opsi',
+        ]);
+
+        $orderOther->items()->create([
+            'nama_barang' => 'Semen',
+            'qty' => 10,
+            'satuan' => 'Zak',
+            'harga_satuan' => 65000,
+            'keterangan' => 'Tidak masuk opsi',
+        ]);
+
+        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/opsi-barang');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', 'Opsi barang penjualan berhasil diambil.')
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.nama_barang', 'Pasir');
+    }
+
+    public function test_penjualan_item_uses_order_penawaran_item_price_and_recalculates_total(): void
+    {
+        $gudang = Gudang::query()->create([
+            'nama_gudang' => 'Gudang Penjualan',
+            'alamat' => 'Jl. Melati',
+            'nama_pic' => 'Budi',
+            'no_pic' => '08123456789',
+        ]);
+
+        $penjualan = Penjualan::query()->create([
+            'kode_penjualan' => 'TRX-002',
+            'tanggal' => '2026-04-25',
+            'status' => 'draft',
+            'total_harga' => 0,
+        ]);
+
+        $order = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-20',
+            'tanggal_dikirim' => '2026-04-25',
+            'nama_pembeli' => 'SPPG A',
+            'keterangan' => 'Bisa dijual',
+        ]);
+
+        $sourceItem = $order->items()->create([
+            'nama_barang' => 'Pasir',
+            'qty' => 5,
+            'satuan' => 'Kg',
+            'harga_satuan' => 12000,
+            'keterangan' => 'Harga sumber',
+        ]);
+
+        $createResponse = $this->postJson('/api/penjualan/'.$penjualan->id.'/items', [
+            'order_penawaran_item_id' => $sourceItem->id,
+            'gudang_id' => $gudang->id,
+            'qty' => 3,
+        ]);
+
+        $createResponse
+            ->assertCreated()
+            ->assertJsonPath('data.nama_barang', 'Pasir')
+            ->assertJsonPath('data.harga_satuan', '12000.00')
+            ->assertJsonPath('data.total_harga', '36000.00')
+            ->assertJsonPath('data.gudang.nama_gudang', 'Gudang Penjualan');
+
+        $itemId = $createResponse->json('data.id');
+
+        $this->assertDatabaseHas('penjualan', [
+            'id' => $penjualan->id,
+            'total_harga' => '36000.00',
+        ]);
+
+        $this->putJson('/api/penjualan/'.$penjualan->id.'/items/'.$itemId, [
+            'order_penawaran_item_id' => $sourceItem->id,
+            'gudang_id' => $gudang->id,
+            'qty' => 4,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.total_harga', '48000.00');
+
+        $this->assertDatabaseHas('penjualan', [
+            'id' => $penjualan->id,
+            'total_harga' => '48000.00',
+        ]);
+
+        $this->deleteJson('/api/penjualan/'.$penjualan->id.'/items/'.$itemId)
+            ->assertOk()
+            ->assertJsonPath('message', 'Item penjualan berhasil dihapus.');
+
+        $this->assertDatabaseHas('penjualan', [
+            'id' => $penjualan->id,
+            'total_harga' => '0.00',
+        ]);
+    }
+}
