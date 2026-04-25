@@ -169,16 +169,16 @@ export default function PiutangSPPGChart() {
 
 
     return (
-        <Card className="rounded-2xl border-0 shadow-sm">
+        <Card className="rounded-2xl bg-white/30 backdrop-blur-2xl">
 
             <CardHeader className="flex flex-row items-center justify-between">
 
                 <div>
-                    <CardTitle>
+                    <CardTitle className="text-white">
                         Total Piutang Global
                     </CardTitle>
 
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-sm text-white mt-1">
                         Piutang penjualan belum lunas per SPPG
                     </p>
                 </div>
@@ -213,11 +213,11 @@ export default function PiutangSPPGChart() {
             <CardContent>
 
                 <div className="mb-8">
-                    <h2 className="text-4xl font-bold text-blue-600">
+                    <h2 className="text-4xl font-bold text-white">
                         {rupiah(totalPiutang)}
                     </h2>
 
-                    <p className="text-muted-foreground mt-2 capitalize">
+                    <p className="text-white mt-2 capitalize">
                         Outstanding mode {filter}
                     </p>
                 </div>
@@ -282,7 +282,7 @@ export default function PiutangSPPGChart() {
                             return (
                                 <div
                                     key={item.name}
-                                    className="rounded-xl border p-4 flex justify-between"
+                                    className="rounded-xl bg-white p-4 flex justify-between"
                                 >
 
                                     <div className="flex items-center gap-3">

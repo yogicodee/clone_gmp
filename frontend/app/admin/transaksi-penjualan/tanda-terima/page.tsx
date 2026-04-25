@@ -302,11 +302,11 @@ export default function Page() {
                   <ArrowUpDown size={14} />
                 </button>
               </th>
-              <th className="p-3">SPPG</th>
-              <th className="p-3">Tanggal</th>
-              <th className="p-3">Armada</th>
-              <th className="p-3">No Pol</th>
-              <th className="p-3">Driver</th>
+              <th className="p-3 text-left">SPPG</th>
+              <th className="p-3 text-left">Tanggal</th>
+              <th className="p-3 text-left">Armada</th>
+              <th className="p-3 text-left">No Pol</th>
+              <th className="p-3 text-left">Driver</th>
 
               <th className="p-3 text-center">
                 Aksi

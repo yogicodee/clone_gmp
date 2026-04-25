@@ -76,7 +76,7 @@ export default function CashflowCard() {
         ).format(n)
 
     return (
-        <Card className="rounded-2xl">
+        <Card className="rounded-2xl bg-white border">
             <CardHeader className="flex flex-row items-center justify-between">
 
                 <div>

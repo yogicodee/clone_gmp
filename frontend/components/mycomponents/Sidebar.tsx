@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   LayoutDashboard,
-  Settings,
   ChevronDown,
   Users,
   MapPin,
@@ -16,11 +15,9 @@ import {
   Banknote,
   ShoppingCart,
   ClipboardList,
-  PackageCheck,
   ArrowDownUp,
   ScanLine,
   PackageSearch,
-  LayoutGrid,
   BarChart3,
   FileText,
   TrendingUp,
@@ -29,8 +26,6 @@ import {
   ScrollText,
   ArrowLeftRight,
   CircleDollarSign,
-  Forklift,
-  Hourglass,
   Mails,
   Building,
   Handbag,
@@ -135,6 +130,8 @@ export default function Sidebar({ open }: { open: boolean }) {
           active={pathname === "/admin"}
           onClick={() => router.push("/admin")}
         />
+
+        <p className="bg-white relative border-b-2 w-auto mt-6"></p>
 
         {menus.map((menu) => (
           <div key={menu.key}>

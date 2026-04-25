@@ -172,13 +172,15 @@ export default function Dashboard() {
 
     const hour = new Date().getHours();
 
-    if (hour >= 5 && hour < 12) return "☀️ Good Morning";
-    if (hour >= 12 && hour < 18) return "🌤️ Good Afternoon";
-    if (hour >= 18 && hour < 22) return "🌙 Good Evening";
+    if (hour >= 5 && hour < 12) return "☀️ Selamat Pagi";
+    if (hour >= 12 && hour < 18) return "🌤️ Selamat Sore";
+    if (hour >= 18 && hour < 22) return "🌙 Selamat Malam";
 
-    return "😴 Good Night";
+    return "😴 Selamat Malam";
 
   };
+
+
 
   return (
     <div className="flex min-h-screen">
@@ -198,9 +200,14 @@ export default function Dashboard() {
 
           </div>
 
-          <Button variant="outline">
-            Bulan Ini
-          </Button>
+          <h2 className="text-base text-black">
+            {new Date().toLocaleDateString("id-ID", {
+              timeZone: "Asia/Jakarta",
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })}
+          </h2>
 
         </div>
 
@@ -292,7 +299,7 @@ ${bottomRow
         <div className="grid gap-6 lg:grid-cols-2">
 
           {/* Cashflow / Omset Trend */}
-          <Card className="rounded-2xl shadow-sm border-0">
+          <Card className="rounded-2xl">
             <CardHeader>
               <CardTitle>Cashflow & Omset Trend</CardTitle>
             </CardHeader>
@@ -304,9 +311,9 @@ ${bottomRow
 
 
           {/* Penjualan Per SPPG */}
-          <Card className="rounded-2xl shadow-sm border-0">
+          <Card className="rounded-2xl shadow-sm border-0 bg-linear-150 to-green-400 from-lime-600">
             <CardHeader>
-              <CardTitle>Penjualan per SPPG</CardTitle>
+              <CardTitle className="text-white">Penjualan per SPPG</CardTitle>
             </CardHeader>
 
             <CardContent>
@@ -405,7 +412,7 @@ ${bottomRow
 
 
           {/* ASSET */}
-          <Card className="rounded-2xl bg-linear-150 from-blue-800 to-blue-950 backdrop-blur-2xl text-white">
+          <Card className="rounded-2xl bg-linear-150 from-primary via-blue-700 to-green-400 text-white">
 
             <CardHeader className="pb-2">
               <CardTitle>Asset / Persediaan</CardTitle>
@@ -413,34 +420,34 @@ ${bottomRow
 
             <CardContent className="space-y-5 pt-2">
 
-              <div className="rounded-xl bg-muted/50 p-4">
-                <p className="text-sm text-white/70">
+              <div className="rounded-xl bg-white p-4">
+                <p className="text-sm text-slate-500">
                   Total Asset
                 </p>
 
-                <h3 className="text-2xl font-bold mt-2">
+                <h3 className="text-2xl font-bold text-slate-700 mt-2">
                   Rp 250.000.000
                 </h3>
               </div>
 
 
-              <div className="rounded-xl bg-muted/50 p-4">
-                <p className="text-sm text-white/70">
+              <div className="rounded-xl bg-white p-4">
+                <p className="text-sm text-slate-500">
                   Jumlah SKU
                 </p>
 
-                <h3 className="text-2xl font-bold mt-2">
+                <h3 className="text-2xl font-bold text-slate-700 mt-2">
                   148
                 </h3>
               </div>
 
 
-              <div className="rounded-xl bg-muted/50 p-4">
-                <p className="text-sm text-white/70">
+              <div className="rounded-xl bg-white p-4">
+                <p className="text-sm text-slate-500">
                   Dead Stock
                 </p>
 
-                <h3 className="text-2xl font-bold mt-2">
+                <h3 className="text-2xl font-bold text-slate-700 mt-2">
                   6 Item
                 </h3>
               </div>

@@ -56,13 +56,13 @@ const BarChartExample = ({ isAnimationActive = true }) => (
     <defs>
 
       <linearGradient id="barBlue" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#4F46E5" />
-        <stop offset="100%" stopColor="#1A1953" />
+        <stop offset="0%" stopColor="#660B05" />
+        <stop offset="100%" stopColor="#FFFFFF" />
       </linearGradient>
 
       <linearGradient id="barPink" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#FFB6D9" />
-        <stop offset="100%" stopColor="#FF85BB" />
+        <stop offset="0%" stopColor="#97BE5A" />
+        <stop offset="100%" stopColor="#FFFFFF" />
       </linearGradient>
 
     </defs>
