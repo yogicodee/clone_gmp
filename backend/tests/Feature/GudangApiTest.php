@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Gudang;
+use App\Models\MasterData\Gudang;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

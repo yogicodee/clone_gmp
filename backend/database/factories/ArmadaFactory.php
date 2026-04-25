@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Armada;
+use App\Models\MasterData\Armada;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

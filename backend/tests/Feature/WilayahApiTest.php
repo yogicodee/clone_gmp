@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Wilayah;
+use App\Models\MasterData\Wilayah;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\DaftarPembelanjaan;
-use App\Models\Kategori;
-use App\Models\Produk;
-use App\Models\Supplier;
+use App\Models\MasterData\Kategori;
+use App\Models\MasterData\Produk;
+use App\Models\MasterData\Supplier;
+use App\Models\TransaksiPembelian\DaftarPembelanjaan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

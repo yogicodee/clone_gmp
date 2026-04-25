@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\DaftarPembelanjaan;
-use App\Models\DaftarPembelanjaanItem;
-use App\Models\Supplier;
+use App\Models\MasterData\Supplier;
+use App\Models\TransaksiPembelian\DaftarPembelanjaan;
+use App\Models\TransaksiPembelian\DaftarPembelanjaanItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

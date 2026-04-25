@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Gudang;
+use App\Models\MasterData\Gudang;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Gudang;
-use App\Models\WarehouseInbound;
+use App\Models\MasterData\Gudang;
+use App\Models\WarehouseSystem\WarehouseInbound;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

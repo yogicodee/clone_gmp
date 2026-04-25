@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Produk;
+use App\Models\MasterData\Produk;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

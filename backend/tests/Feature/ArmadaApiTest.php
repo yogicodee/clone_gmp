@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Armada;
+use App\Models\MasterData\Armada;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

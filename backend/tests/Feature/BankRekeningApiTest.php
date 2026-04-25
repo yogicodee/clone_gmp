@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\BankRekening;
+use App\Models\MasterData\BankRekening;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

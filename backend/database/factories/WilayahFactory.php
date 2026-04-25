@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Wilayah;
+use App\Models\MasterData\Wilayah;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

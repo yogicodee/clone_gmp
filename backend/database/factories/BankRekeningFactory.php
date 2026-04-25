@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\BankRekening;
+use App\Models\MasterData\BankRekening;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

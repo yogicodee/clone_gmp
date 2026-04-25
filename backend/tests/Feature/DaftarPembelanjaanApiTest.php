@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\DaftarPembelanjaan;
-use App\Models\OrderPenawaran;
+use App\Models\TransaksiPembelian\DaftarPembelanjaan;
+use App\Models\TransaksiPembelian\OrderPenawaran;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

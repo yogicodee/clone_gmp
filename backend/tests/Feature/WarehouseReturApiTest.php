@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Gudang;
-use App\Models\WarehouseStokBasah;
-use App\Models\WarehouseStokKering;
+use App\Models\MasterData\Gudang;
+use App\Models\WarehouseSystem\WarehouseStokBasah;
+use App\Models\WarehouseSystem\WarehouseStokKering;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

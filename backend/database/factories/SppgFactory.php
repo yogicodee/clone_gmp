@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Sppg;
+use App\Models\MasterData\Sppg;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

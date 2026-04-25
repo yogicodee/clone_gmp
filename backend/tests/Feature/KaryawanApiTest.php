@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Karyawan;
+use App\Models\MasterData\Karyawan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

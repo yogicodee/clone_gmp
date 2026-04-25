@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Karyawan;
+use App\Models\MasterData\Karyawan;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

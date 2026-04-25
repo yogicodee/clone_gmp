@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Gudang;
-use App\Models\OrderPenawaran;
-use App\Models\Penjualan;
+use App\Models\MasterData\Gudang;
+use App\Models\TransaksiPembelian\OrderPenawaran;
+use App\Models\TransaksiPenjualan\Penjualan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

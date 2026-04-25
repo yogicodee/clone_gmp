@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Kategori;
+use App\Models\MasterData\Kategori;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
