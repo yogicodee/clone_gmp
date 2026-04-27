@@ -1,33 +1,34 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\MasterData\ArmadaController;
-use App\Http\Controllers\Api\MasterData\BankRekeningController;
-use App\Http\Controllers\Api\MasterData\GudangController;
-use App\Http\Controllers\Api\MasterData\KaryawanController;
-use App\Http\Controllers\Api\MasterData\KategoriController;
-use App\Http\Controllers\Api\MasterData\MitraController;
-use App\Http\Controllers\Api\MasterData\PerusahaanController;
-use App\Http\Controllers\Api\MasterData\ProdukController;
-use App\Http\Controllers\Api\MasterData\SppgController;
-use App\Http\Controllers\Api\MasterData\SupplierController;
-use App\Http\Controllers\Api\MasterData\WilayahController;
-use App\Http\Controllers\Api\TransaksiPenjualan\InvoicePenjualanController;
-use App\Http\Controllers\Api\TransaksiPembelian\DaftarPembelanjaanController;
-use App\Http\Controllers\Api\TransaksiPembelian\DaftarPembelanjaanItemController;
-use App\Http\Controllers\Api\TransaksiPembelian\DaftarPembelanjaanSupplierController;
-use App\Http\Controllers\Api\TransaksiPembelian\OrderPenawaranController;
-use App\Http\Controllers\Api\TransaksiPembelian\OrderPenawaranItemController;
-use App\Http\Controllers\Api\TransaksiPenjualan\PenjualanController;
-use App\Http\Controllers\Api\TransaksiPenjualan\PenjualanItemController;
-use App\Http\Controllers\Api\TransaksiPenjualan\SuratJalanController;
-use App\Http\Controllers\Api\TransaksiPenjualan\SuratJalanItemController;
-use App\Http\Controllers\Api\TransaksiPenjualan\TandaTerimaController;
-use App\Http\Controllers\Api\TransaksiPenjualan\TandaTerimaItemController;
-use App\Http\Controllers\Api\WarehouseSystem\WarehouseInboundController;
-use App\Http\Controllers\Api\WarehouseSystem\WarehouseReturController;
-use App\Http\Controllers\Api\WarehouseSystem\WarehouseStokBasahController;
-use App\Http\Controllers\Api\WarehouseSystem\WarehouseStokKeringController;
+use App\Http\Controllers\Api\Dashboard\DashboardSummaryController;
+use App\Http\Controllers\Api\MasterData\Armada\ArmadaController;
+use App\Http\Controllers\Api\MasterData\BankRekening\BankRekeningController;
+use App\Http\Controllers\Api\MasterData\Gudang\GudangController;
+use App\Http\Controllers\Api\MasterData\Karyawan\KaryawanController;
+use App\Http\Controllers\Api\MasterData\Kategori\KategoriController;
+use App\Http\Controllers\Api\MasterData\Mitra\MitraController;
+use App\Http\Controllers\Api\MasterData\Perusahaan\PerusahaanController;
+use App\Http\Controllers\Api\MasterData\Produk\ProdukController;
+use App\Http\Controllers\Api\MasterData\Sppg\SppgController;
+use App\Http\Controllers\Api\MasterData\Supplier\SupplierController;
+use App\Http\Controllers\Api\MasterData\Wilayah\WilayahController;
+use App\Http\Controllers\Api\TransaksiPembelian\DaftarPembelanjaan\DaftarPembelanjaanController;
+use App\Http\Controllers\Api\TransaksiPembelian\DaftarPembelanjaan\DaftarPembelanjaanItem\DaftarPembelanjaanItemController;
+use App\Http\Controllers\Api\TransaksiPembelian\DaftarPembelanjaanSupplier\DaftarPembelanjaanSupplierController;
+use App\Http\Controllers\Api\TransaksiPembelian\OrderPenawaran\OrderPenawaranController;
+use App\Http\Controllers\Api\TransaksiPembelian\OrderPenawaran\OrderPenawaranItem\OrderPenawaranItemController;
+use App\Http\Controllers\Api\TransaksiPenjualan\InvoicePenjualan\InvoicePenjualanController;
+use App\Http\Controllers\Api\TransaksiPenjualan\Penjualan\PenjualanController;
+use App\Http\Controllers\Api\TransaksiPenjualan\Penjualan\PenjualanItem\PenjualanItemController;
+use App\Http\Controllers\Api\TransaksiPenjualan\SuratJalan\SuratJalanController;
+use App\Http\Controllers\Api\TransaksiPenjualan\SuratJalan\SuratJalanItem\SuratJalanItemController;
+use App\Http\Controllers\Api\TransaksiPenjualan\TandaTerima\TandaTerimaController;
+use App\Http\Controllers\Api\TransaksiPenjualan\TandaTerima\TandaTerimaItem\TandaTerimaItemController;
+use App\Http\Controllers\Api\WarehouseSystem\WarehouseInbound\WarehouseInboundController;
+use App\Http\Controllers\Api\WarehouseSystem\WarehouseRetur\WarehouseReturController;
+use App\Http\Controllers\Api\WarehouseSystem\WarehouseStokBasah\WarehouseStokBasahController;
+use App\Http\Controllers\Api\WarehouseSystem\WarehouseStokKering\WarehouseStokKeringController;
 use Illuminate\Support\Facades\Route;
 
 //Autenthication
@@ -39,6 +40,8 @@ Route::prefix('auth')->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
+
+Route::get('dashboard/summary', DashboardSummaryController::class);
 
 // ============================== Master Data ===========================
 Route::apiResource('wilayah', WilayahController::class);
@@ -81,6 +84,7 @@ Route::post('penjualan/{penjualan}/items', [PenjualanItemController::class, 'sto
 Route::get('penjualan/{penjualan}/items/{item}', [PenjualanItemController::class, 'show']);
 Route::put('penjualan/{penjualan}/items/{item}', [PenjualanItemController::class, 'update']);
 Route::delete('penjualan/{penjualan}/items/{item}', [PenjualanItemController::class, 'destroy']);
+
 Route::apiResource('surat-jalan', SuratJalanController::class);
 Route::get('surat-jalan/{suratJalan}/opsi-barang', [SuratJalanItemController::class, 'opsiBarang']);
 Route::get('surat-jalan/{suratJalan}/items', [SuratJalanItemController::class, 'index']);
@@ -88,6 +92,7 @@ Route::post('surat-jalan/{suratJalan}/items', [SuratJalanItemController::class, 
 Route::get('surat-jalan/{suratJalan}/items/{item}', [SuratJalanItemController::class, 'show']);
 Route::put('surat-jalan/{suratJalan}/items/{item}', [SuratJalanItemController::class, 'update']);
 Route::delete('surat-jalan/{suratJalan}/items/{item}', [SuratJalanItemController::class, 'destroy']);
+
 Route::apiResource('tanda-terima', TandaTerimaController::class);
 Route::get('tanda-terima/{tandaTerima}/opsi-barang', [TandaTerimaItemController::class, 'opsiBarang']);
 Route::get('tanda-terima/{tandaTerima}/items', [TandaTerimaItemController::class, 'index']);

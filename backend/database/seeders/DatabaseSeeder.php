@@ -27,6 +27,8 @@ class DatabaseSeeder extends Seeder
             'Super Admin Demo',
             'super_admin'
         );
+
+        $this->call(DashboardSummarySeeder::class);
     }
 
     private function upsertUser(string $email, string $nama, string $role): void
