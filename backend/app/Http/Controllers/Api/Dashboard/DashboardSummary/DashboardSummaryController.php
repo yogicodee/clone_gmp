@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\Dashboard;
+namespace App\Http\Controllers\Api\Dashboard\DashboardSummary;
 
 use App\Http\Controllers\Controller;
 use App\Models\TransaksiPenjualan\Penjualan;

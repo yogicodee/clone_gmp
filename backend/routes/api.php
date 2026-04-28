@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\Dashboard\DashboardSummaryController;
+use App\Http\Controllers\Api\Dashboard\DashboardSalesBySppg\DashboardSalesBySppgController;
+use App\Http\Controllers\Api\Dashboard\DashboardSummary\DashboardSummaryController;
+use App\Http\Controllers\Api\LaporanAnalisa\LaporanStokBarang\LaporanStokBarangController;
+use App\Http\Controllers\Api\LaporanAnalisa\LabaRugiTransaksional\LabaRugiTransaksionalController;
 use App\Http\Controllers\Api\MasterData\Armada\ArmadaController;
 use App\Http\Controllers\Api\MasterData\BankRekening\BankRekeningController;
 use App\Http\Controllers\Api\MasterData\Gudang\GudangController;
@@ -41,7 +44,13 @@ Route::prefix('auth')->group(function (): void {
     });
 });
 
+//============================== Dashboard =============================
 Route::get('dashboard/summary', DashboardSummaryController::class);
+Route::get('dashboard/penjualan-per-sppg', DashboardSalesBySppgController::class);
+
+//============================== Laporan dan Analisa =====================
+Route::get('laporan/stok-barang', LaporanStokBarangController::class);
+Route::get('laporan/laba-rugi-transaksional', LabaRugiTransaksionalController::class);
 
 // ============================== Master Data ===========================
 Route::apiResource('wilayah', WilayahController::class);

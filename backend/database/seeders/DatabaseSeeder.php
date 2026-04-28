@@ -29,6 +29,9 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->call(DashboardSummarySeeder::class);
+        $this->call(DashboardSalesBySppgSeeder::class);
+        $this->call(LaporanStokBarangSeeder::class);
+        $this->call(LabaRugiTransaksionalSeeder::class);
     }
 
     private function upsertUser(string $email, string $nama, string $role): void
