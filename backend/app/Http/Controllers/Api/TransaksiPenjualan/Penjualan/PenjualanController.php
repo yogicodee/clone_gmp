@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\Penjualan;
 
 use App\Http\Controllers\Controller;
+use App\Models\TransaksiPembelian\OrderPenawaran;
 use App\Models\TransaksiPenjualan\Penjualan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PenjualanController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $this->syncHeadersFromOrderPenawaran();
+
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
             'sort_field' => ['nullable', Rule::in(['id', 'kode_penjualan', 'tanggal', 'total_harga', 'status'])],
@@ -25,11 +30,17 @@ class PenjualanController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $records = Penjualan::query()
+            ->with('orderPenawaran:id,tanggal_dikirim,nama_pembeli,keterangan')
             ->when($search, function ($query, string $keyword): void {
                 $query->where(function ($subQuery) use ($keyword): void {
                     $subQuery
                         ->where('kode_penjualan', 'like', '%'.$keyword.'%')
-                        ->orWhere('status', 'like', '%'.$keyword.'%');
+                        ->orWhere('status', 'like', '%'.$keyword.'%')
+                        ->orWhereHas('orderPenawaran', function ($orderQuery) use ($keyword): void {
+                            $orderQuery
+                                ->where('nama_pembeli', 'like', '%'.$keyword.'%')
+                                ->orWhere('keterangan', 'like', '%'.$keyword.'%');
+                        });
                 });
             })
             ->orderBy($sortField, $sortOrder)
@@ -53,7 +64,7 @@ class PenjualanController extends Controller
     public function store(Request $request): JsonResponse
     {
         $payload = $this->validatePayload($request);
-        $payload['total_harga'] = 0;
+        $payload['total_harga'] = $payload['total_harga'] ?? 0;
 
         $record = Penjualan::query()->create($payload);
 
@@ -65,7 +76,11 @@ class PenjualanController extends Controller
 
     public function show(Penjualan $penjualan): JsonResponse
     {
-        $penjualan->load(['items.gudang', 'items.orderPenawaranItem.orderPenawaran']);
+        $penjualan->load([
+            'orderPenawaran',
+            'items.gudang',
+            'items.orderPenawaranItem.orderPenawaran',
+        ]);
 
         return response()->json([
             'message' => 'Detail penjualan berhasil diambil.',
@@ -95,15 +110,80 @@ class PenjualanController extends Controller
 
     private function validatePayload(Request $request, ?Penjualan $penjualan = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
+            'order_penawaran_id' => [
+                'nullable',
+                'integer',
+                'exists:order_penawaran,id',
+                Rule::unique('penjualan', 'order_penawaran_id')->ignore($penjualan?->id),
+            ],
             'kode_penjualan' => [
-                'required',
+                'nullable',
                 'string',
                 'max:50',
                 Rule::unique('penjualan', 'kode_penjualan')->ignore($penjualan?->id),
             ],
-            'tanggal' => ['required', 'date'],
+            'tanggal' => ['nullable', 'date'],
             'status' => ['required', Rule::in(['draft', 'selesai', 'batal'])],
         ]);
+
+        if (! empty($payload['order_penawaran_id'])) {
+            $orderPenawaran = OrderPenawaran::query()->findOrFail($payload['order_penawaran_id']);
+
+            if ($orderPenawaran->tanggal_dikirim === null) {
+                throw ValidationException::withMessages([
+                    'order_penawaran_id' => 'Order penawaran harus memiliki tanggal kirim untuk menjadi penjualan.',
+                ]);
+            }
+
+            $payload['tanggal'] = $orderPenawaran->tanggal_dikirim;
+            $payload['kode_penjualan'] = $payload['kode_penjualan'] ?: $this->generateKodePenjualan($orderPenawaran->id);
+            $payload['total_harga'] = $orderPenawaran->items()->get()
+                ->sum(fn ($item) => (float) $item->qty * (float) $item->harga_satuan);
+        } else {
+            $payload['kode_penjualan'] = $payload['kode_penjualan'] ?? null;
+
+            if ($payload['kode_penjualan'] === null || empty($payload['tanggal'])) {
+                throw ValidationException::withMessages([
+                    'order_penawaran_id' => 'Pilih sumber order penawaran, atau isi kode penjualan dan tanggal manual.',
+                ]);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function syncHeadersFromOrderPenawaran(): void
+    {
+        $orders = OrderPenawaran::query()
+            ->with('items')
+            ->whereNotNull('tanggal_dikirim')
+            ->orderBy('id')
+            ->get();
+
+        DB::transaction(function () use ($orders): void {
+            foreach ($orders as $order) {
+                $existing = Penjualan::query()
+                    ->where('order_penawaran_id', $order->id)
+                    ->first();
+
+                Penjualan::query()->updateOrCreate(
+                    ['order_penawaran_id' => $order->id],
+                    [
+                        'kode_penjualan' => $existing?->kode_penjualan ?: $this->generateKodePenjualan($order->id),
+                        'tanggal' => $order->tanggal_dikirim,
+                        'status' => $existing?->status ?: 'draft',
+                        'total_harga' => $order->items->sum(
+                            fn ($item) => (float) $item->qty * (float) $item->harga_satuan
+                        ),
+                    ]
+                );
+            }
+        });
+    }
+
+    private function generateKodePenjualan(int $orderPenawaranId): string
+    {
+        return 'TRX-OP-'.str_pad((string) $orderPenawaranId, 4, '0', STR_PAD_LEFT);
     }
 }

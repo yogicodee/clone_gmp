@@ -15,6 +15,7 @@ class PenjualanItemApiTest extends TestCase
     public function test_opsi_barang_only_returns_items_with_same_shipping_date(): void
     {
         $penjualan = Penjualan::query()->create([
+            'order_penawaran_id' => null,
             'kode_penjualan' => 'TRX-001',
             'tanggal' => '2026-04-25',
             'status' => 'draft',
@@ -69,18 +70,19 @@ class PenjualanItemApiTest extends TestCase
             'no_pic' => '08123456789',
         ]);
 
-        $penjualan = Penjualan::query()->create([
-            'kode_penjualan' => 'TRX-002',
-            'tanggal' => '2026-04-25',
-            'status' => 'draft',
-            'total_harga' => 0,
-        ]);
-
         $order = OrderPenawaran::query()->create([
             'tanggal_pesan' => '2026-04-20',
             'tanggal_dikirim' => '2026-04-25',
             'nama_pembeli' => 'SPPG A',
             'keterangan' => 'Bisa dijual',
+        ]);
+
+        $penjualan = Penjualan::query()->create([
+            'order_penawaran_id' => $order->id,
+            'kode_penjualan' => 'TRX-002',
+            'tanggal' => '2026-04-25',
+            'status' => 'draft',
+            'total_harga' => 0,
         ]);
 
         $sourceItem = $order->items()->create([
@@ -132,5 +134,49 @@ class PenjualanItemApiTest extends TestCase
             'id' => $penjualan->id,
             'total_harga' => '0.00',
         ]);
+    }
+
+    public function test_penjualan_item_index_falls_back_to_order_penawaran_detail_when_manual_items_empty(): void
+    {
+        $order = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-29',
+            'tanggal_dikirim' => '2026-04-30',
+            'nama_pembeli' => 'Toko A',
+            'keterangan' => 'dummy',
+        ]);
+
+        $order->items()->create([
+            'nama_barang' => 'Indomie Ayam Bawang',
+            'qty' => 50,
+            'satuan' => 'PCS',
+            'harga_satuan' => 3000,
+            'keterangan' => null,
+        ]);
+
+        $order->items()->create([
+            'nama_barang' => 'Indomie Ayam Bawang',
+            'qty' => 5,
+            'satuan' => 'PCS',
+            'harga_satuan' => 3000,
+            'keterangan' => null,
+        ]);
+
+        $penjualan = Penjualan::query()->create([
+            'order_penawaran_id' => $order->id,
+            'kode_penjualan' => 'TRX-OP-0001',
+            'tanggal' => '2026-04-30',
+            'status' => 'draft',
+            'total_harga' => 165000,
+        ]);
+
+        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/items');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.nama_barang', 'Indomie Ayam Bawang')
+            ->assertJsonPath('data.0.qty', '50.00')
+            ->assertJsonPath('data.0.harga_satuan', '3000.00')
+            ->assertJsonPath('data.0.total_harga', '150000.00');
     }
 }

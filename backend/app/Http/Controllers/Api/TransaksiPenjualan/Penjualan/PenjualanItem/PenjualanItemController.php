@@ -30,6 +30,33 @@ class PenjualanItemController extends Controller
             ->orderBy('id')
             ->get();
 
+        if ($items->isEmpty() && $penjualan->order_penawaran_id !== null) {
+            $items = OrderPenawaranItem::query()
+                ->where('order_penawaran_id', $penjualan->order_penawaran_id)
+                ->when($search, function ($query, string $keyword): void {
+                    $query->where('nama_barang', 'like', '%'.$keyword.'%');
+                })
+                ->orderBy('id')
+                ->get()
+                ->map(function (OrderPenawaranItem $item): array {
+                    return [
+                        'id' => $item->id,
+                        'penjualan_id' => null,
+                        'order_penawaran_item_id' => $item->id,
+                        'produk_id' => $item->produk_id,
+                        'gudang_id' => null,
+                        'gudang' => null,
+                        'nama_barang' => $item->nama_barang,
+                        'qty' => $item->qty,
+                        'satuan' => $item->satuan,
+                        'harga_satuan' => $item->harga_satuan,
+                        'total_harga' => number_format((float) $item->qty * (float) $item->harga_satuan, 2, '.', ''),
+                        'keterangan' => $item->keterangan,
+                    ];
+                })
+                ->values();
+        }
+
         return response()->json([
             'message' => 'Data item penjualan berhasil diambil.',
             'data' => $items,
@@ -99,8 +126,12 @@ class PenjualanItemController extends Controller
     {
         $items = OrderPenawaranItem::query()
             ->with('orderPenawaran:id,tanggal_dikirim')
-            ->whereHas('orderPenawaran', function ($query) use ($penjualan): void {
-                $query->whereDate('tanggal_dikirim', $penjualan->tanggal);
+            ->when($penjualan->order_penawaran_id !== null, function ($query) use ($penjualan): void {
+                $query->where('order_penawaran_id', $penjualan->order_penawaran_id);
+            }, function ($query) use ($penjualan): void {
+                $query->whereHas('orderPenawaran', function ($orderQuery) use ($penjualan): void {
+                    $orderQuery->whereDate('tanggal_dikirim', $penjualan->tanggal);
+                });
             })
             ->orderBy('nama_barang')
             ->get();
@@ -146,9 +177,13 @@ class PenjualanItemController extends Controller
             ->with('orderPenawaran:id,tanggal_dikirim')
             ->findOrFail($payload['order_penawaran_item_id']);
 
-        if ($sourceItem->orderPenawaran === null || $sourceItem->orderPenawaran->tanggal_dikirim !== $penjualan->tanggal->format('Y-m-d')) {
+        $belongsToSameSource = $penjualan->order_penawaran_id !== null
+            ? $sourceItem->order_penawaran_id === $penjualan->order_penawaran_id
+            : $sourceItem->orderPenawaran !== null && $sourceItem->orderPenawaran->tanggal_dikirim === $penjualan->tanggal->format('Y-m-d');
+
+        if (! $belongsToSameSource) {
             throw ValidationException::withMessages([
-                'order_penawaran_item_id' => 'Barang hanya boleh diambil dari order penawaran dengan tanggal kirim yang sama.',
+                'order_penawaran_item_id' => 'Barang hanya boleh diambil dari order penawaran sumber penjualan yang sama.',
             ]);
         }
 
