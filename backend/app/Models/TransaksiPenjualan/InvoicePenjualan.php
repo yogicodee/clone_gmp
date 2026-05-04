@@ -2,6 +2,7 @@
 
 namespace App\Models\TransaksiPenjualan;
 
+use App\Models\MasterData\Sppg;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,7 @@ class InvoicePenjualan extends Model
     protected $fillable = [
         'nomor_invoice',
         'penjualan_id',
+        'sppg_id',
         'tanggal_invoice',
         'total_tagihan',
         'status_pembayaran',
@@ -27,6 +29,7 @@ class InvoicePenjualan extends Model
 
     protected $appends = [
         'kode_penjualan',
+        'nama_sppg',
     ];
 
     public function penjualan(): BelongsTo
@@ -34,8 +37,18 @@ class InvoicePenjualan extends Model
         return $this->belongsTo(Penjualan::class, 'penjualan_id');
     }
 
+    public function sppg(): BelongsTo
+    {
+        return $this->belongsTo(Sppg::class, 'sppg_id');
+    }
+
     public function getKodePenjualanAttribute(): ?string
     {
         return $this->penjualan?->kode_penjualan;
+    }
+
+    public function getNamaSppgAttribute(): ?string
+    {
+        return $this->sppg?->nama_sppg;
     }
 }

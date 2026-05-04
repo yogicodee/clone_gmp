@@ -27,7 +27,7 @@ class InvoicePenjualanController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $records = InvoicePenjualan::query()
-            ->with('penjualan:id,kode_penjualan')
+            ->with(['penjualan:id,kode_penjualan', 'sppg:id,nama_sppg'])
             ->when($search, function ($query, string $keyword): void {
                 $query->where(function ($subQuery) use ($keyword): void {
                     $subQuery
@@ -63,13 +63,16 @@ class InvoicePenjualanController extends Controller
 
         return response()->json([
             'message' => 'Invoice penjualan berhasil ditambahkan.',
-            'data' => $record->load('penjualan:id,kode_penjualan'),
+            'data' => $record->load(['penjualan:id,kode_penjualan', 'sppg:id,nama_sppg']),
         ], 201);
     }
 
     public function show(InvoicePenjualan $invoicePenjualan): JsonResponse
     {
-        $invoicePenjualan->load('penjualan:id,kode_penjualan,tanggal,total_harga,status');
+        $invoicePenjualan->load([
+            'penjualan:id,kode_penjualan,tanggal,total_harga,status',
+            'sppg:id,nama_sppg',
+        ]);
 
         return response()->json([
             'message' => 'Detail invoice penjualan berhasil diambil.',
@@ -84,7 +87,7 @@ class InvoicePenjualanController extends Controller
 
         return response()->json([
             'message' => 'Invoice penjualan berhasil diperbarui.',
-            'data' => $invoicePenjualan->fresh('penjualan:id,kode_penjualan'),
+            'data' => $invoicePenjualan->fresh(['penjualan:id,kode_penjualan', 'sppg:id,nama_sppg']),
         ]);
     }
 
@@ -107,6 +110,7 @@ class InvoicePenjualanController extends Controller
                 Rule::unique('invoice_penjualan', 'nomor_invoice')->ignore($invoicePenjualan?->id),
             ],
             'penjualan_id' => ['required', 'integer', 'exists:penjualan,id'],
+            'sppg_id' => ['nullable', 'integer', 'exists:sppg,id'],
             'tanggal_invoice' => ['required', 'date'],
             'total_tagihan' => ['nullable', 'numeric', 'min:0'],
             'status_pembayaran' => ['required', Rule::in(['lunas', 'belum lunas'])],
