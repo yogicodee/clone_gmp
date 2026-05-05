@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -27,6 +27,8 @@ type FormType = {
     keterangan: string;
 };
 
+type FieldErrors = Partial<Record<keyof FormType, string>>;
+
 type SortField = "nama_barang" | "qty" | "satuan" | "harga_satuan";
 
 const initialForm: FormType = {
@@ -52,6 +54,7 @@ export default function Page() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
     const [form, setForm] = useState<FormType>(initialForm);
     const [editTarget, setEditTarget] = useState<OrderPenawaranItem | null>(null);
@@ -64,7 +67,7 @@ export default function Page() {
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    async function fetchData() {
+    const fetchData = useCallback(async () => {
         try {
             setLoading(true);
             setError("");
@@ -92,22 +95,25 @@ export default function Page() {
         } finally {
             setLoading(false);
         }
-    }
-
-    useEffect(() => {
-        if (!Number.isNaN(orderId)) {
-            void fetchData();
-        }
     }, [orderId]);
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
+        if (!Number.isNaN(orderId)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            void fetchData();
+        }
+    }, [fetchData, orderId]);
 
     function resetForm() {
         setForm(initialForm);
+        setFieldErrors({});
         setEditTarget(null);
         setOpenForm(false);
+    }
+
+    function clearFieldError(field: keyof FormType) {
+        setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+        setError("");
     }
 
     function handleSort(field: SortField) {
@@ -123,26 +129,24 @@ export default function Page() {
     function handleProdukChange(value: string) {
         const produkId = Number(value);
         const selectedProduk = produkOptions.find((item) => item.id === produkId);
+        const matchedKategori =
+            kategoriOptions.find(
+                (item) =>
+                    item.nama_satuan.trim().toLowerCase() ===
+                    (selectedProduk?.satuan ?? "").trim().toLowerCase()
+            ) ?? null;
 
         setForm((prev) => ({
             ...prev,
             produk_id: Number.isNaN(produkId) ? "" : produkId,
+            kategori_id: matchedKategori?.id ?? "",
             nama_barang: selectedProduk?.nama ?? "",
-            satuan: prev.kategori_id
-                ? kategoriOptions.find((item) => item.id === prev.kategori_id)?.nama_satuan ?? prev.satuan
-                : selectedProduk?.satuan ?? "",
+            satuan: selectedProduk?.satuan ?? "",
         }));
-    }
-
-    function handleKategoriChange(value: string) {
-        const kategoriId = Number(value);
-        const selectedKategori = kategoriOptions.find((item) => item.id === kategoriId);
-
-        setForm((prev) => ({
-            ...prev,
-            kategori_id: Number.isNaN(kategoriId) ? "" : kategoriId,
-            satuan: selectedKategori?.nama_satuan ?? prev.satuan,
-        }));
+        clearFieldError("produk_id");
+        clearFieldError("nama_barang");
+        clearFieldError("kategori_id");
+        clearFieldError("satuan");
     }
 
     function handleEdit(item: OrderPenawaranItem) {
@@ -156,18 +160,60 @@ export default function Page() {
             harga_satuan: String(item.harga_satuan),
             keterangan: item.keterangan ?? "",
         });
+        setFieldErrors({});
         setOpenForm(true);
     }
 
+    function formatDate(value: string) {
+        if (!value) {
+            return "-";
+        }
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+
+        return date.toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        });
+    }
+
     async function handleSubmit() {
+        const nextFieldErrors: FieldErrors = {};
+
+        if (form.produk_id === "") nextFieldErrors.produk_id = "Nama barang wajib dipilih.";
+        if (!form.nama_barang.trim()) nextFieldErrors.nama_barang = "Nama barang wajib diisi.";
+        if (!form.qty.trim()) {
+            nextFieldErrors.qty = "Qty wajib diisi.";
+        } else if (Number(form.qty) <= 0) {
+            nextFieldErrors.qty = "Qty harus lebih dari 0.";
+        }
+        if (!form.satuan.trim()) nextFieldErrors.satuan = "Satuan wajib diisi.";
+        if (!form.harga_satuan.trim()) {
+            nextFieldErrors.harga_satuan = "Harga penawaran wajib diisi.";
+        } else if (Number(form.harga_satuan) < 0) {
+            nextFieldErrors.harga_satuan = "Harga penawaran tidak boleh negatif.";
+        }
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccess("");
+            return;
+        }
+
         try {
             setSubmitting(true);
             setError("");
             setSuccess("");
+            setFieldErrors({});
 
             const payload = {
                 produk_id: form.produk_id === "" ? null : Number(form.produk_id),
                 kategori_id: form.kategori_id === "" ? null : Number(form.kategori_id),
+                supplier_id: null,
                 nama_barang: form.nama_barang,
                 qty: Number(form.qty),
                 satuan: form.satuan,
@@ -224,7 +270,10 @@ export default function Page() {
                 return true;
             }
 
-            return item.nama_barang.toLowerCase().includes(normalizedSearch);
+            return (
+                item.nama_barang.toLowerCase().includes(normalizedSearch) ||
+                (item.keterangan ?? "").toLowerCase().includes(normalizedSearch)
+            );
         });
 
         result.sort((a, b) => {
@@ -238,16 +287,11 @@ export default function Page() {
     }, [items, search, sortField, sortOrder]);
 
     const totalPages = Math.max(1, Math.ceil(filteredItems.length / perPage));
+    const normalizedCurrentPage = Math.min(currentPage, totalPages);
     const paginatedItems = filteredItems.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [currentPage, totalPages]);
 
     return (
         <div className="p-6 space-y-6">
@@ -256,7 +300,7 @@ export default function Page() {
                     <h1 className="text-xl font-bold">Detail Order #{orderId}</h1>
                     {order ? (
                         <p className="text-sm text-gray-600 mt-1">
-                            {order.nama_pembeli} | {order.tanggal_pesan}
+                            {order.nama_pembeli} | {formatDate(order.tanggal_pesan)}
                         </p>
                     ) : null}
                 </div>
@@ -283,9 +327,12 @@ export default function Page() {
 
             <div className="flex items-center justify-between gap-4">
                 <input
-                    placeholder="Cari barang..."
+                    placeholder="Cari barang atau keterangan..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
                 />
 
@@ -362,7 +409,7 @@ export default function Page() {
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {(currentPage - 1) * perPage + index + 1}
+                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3">{item.qty}</td>
@@ -394,7 +441,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -405,14 +452,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={normalizedCurrentPage === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -433,7 +480,7 @@ export default function Page() {
                                 <select
                                     value={form.produk_id}
                                     onChange={(e) => handleProdukChange(e.target.value)}
-                                    className="w-full border p-2 rounded-md"
+                                    className={`w-full border p-2 rounded-md ${fieldErrors.produk_id ? "border-red-500 focus:outline-red-500" : ""}`}
                                 >
                                     <option value="">Pilih Nama Barang</option>
                                     {produkOptions.map((item) => (
@@ -442,6 +489,9 @@ export default function Page() {
                                         </option>
                                     ))}
                                 </select>
+                                {fieldErrors.produk_id ? (
+                                    <p className="text-xs text-red-600">{fieldErrors.produk_id}</p>
+                                ) : null}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -449,30 +499,18 @@ export default function Page() {
                                     <label className="text-sm font-medium">Qty</label>
                                     <input
                                         type="number"
-                                        min="0"
+                                        min="1"
                                         value={form.qty}
-                                        onChange={(e) =>
-                                            setForm((prev) => ({ ...prev, qty: e.target.value }))
-                                        }
-                                        className="w-full border p-2 rounded-md"
+                                        onChange={(e) => {
+                                            setForm((prev) => ({ ...prev, qty: e.target.value }));
+                                            clearFieldError("qty");
+                                        }}
+                                        className={`w-full border p-2 rounded-md ${fieldErrors.qty ? "border-red-500 focus:outline-red-500" : ""}`}
                                         placeholder="Qty"
                                     />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Pilih Nama Satuan</label>
-                                    <select
-                                        value={form.kategori_id}
-                                        onChange={(e) => handleKategoriChange(e.target.value)}
-                                        className="w-full border p-2 rounded-md"
-                                    >
-                                        <option value="">Pilih Nama Satuan</option>
-                                        {kategoriOptions.map((item) => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.nama_satuan}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    {fieldErrors.qty ? (
+                                        <p className="text-xs text-red-600">{fieldErrors.qty}</p>
+                                    ) : null}
                                 </div>
                             </div>
 
@@ -481,12 +519,15 @@ export default function Page() {
                                     <label className="text-sm font-medium">Satuan</label>
                                     <input
                                         value={form.satuan}
-                                        onChange={(e) =>
-                                            setForm((prev) => ({ ...prev, satuan: e.target.value }))
-                                        }
-                                        className="w-full border p-2 rounded-md"
+                                        readOnly
+                                        className={`w-full border p-2 rounded-md bg-slate-50 text-slate-700 ${fieldErrors.satuan ? "border-red-500 focus:outline-red-500" : ""}`}
                                         placeholder="Satuan"
                                     />
+                                    {fieldErrors.satuan ? (
+                                        <p className="text-xs text-red-600">{fieldErrors.satuan}</p>
+                                    ) : (
+                                        <p className="text-xs text-gray-500">Satuan otomatis mengikuti barang yang dipilih.</p>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -495,15 +536,19 @@ export default function Page() {
                                         type="number"
                                         min="0"
                                         value={form.harga_satuan}
-                                        onChange={(e) =>
+                                        onChange={(e) => {
                                             setForm((prev) => ({
                                                 ...prev,
                                                 harga_satuan: e.target.value,
-                                            }))
-                                        }
-                                        className="w-full border p-2 rounded-md"
+                                            }));
+                                            clearFieldError("harga_satuan");
+                                        }}
+                                        className={`w-full border p-2 rounded-md ${fieldErrors.harga_satuan ? "border-red-500 focus:outline-red-500" : ""}`}
                                         placeholder="Harga Penawaran"
                                     />
+                                    {fieldErrors.harga_satuan ? (
+                                        <p className="text-xs text-red-600">{fieldErrors.harga_satuan}</p>
+                                    ) : null}
                                 </div>
                             </div>
 

@@ -1,499 +1,512 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
+import { useRouter } from "next/navigation";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
-import { useRouter } from "next/navigation";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
-/* ================= TYPE ================= */
-type Product = {
+type SppgOption = {
     id: number;
-    nomor_surat_jalan: string;
     nama_sppg: string;
-    tanggal: string;
-    no_po: string;
-    armada: string;
-    no_pol: string;
-    nama_driver: string;
 };
 
-type FormType = Omit<Product, "id">;
+type ArmadaOption = {
+    id: number;
+    nama_unit: string;
+    no_pol: string;
+};
 
-/* ================= MASTER DROPDOWN ================= */
+type DriverOption = {
+    id: number;
+    nama: string;
+};
 
-const sppgOptions = [
-    "SPPG Surabaya",
-    "SPPG Sidoarjo",
-    "SPPG Gresik",
-];
+type SuratJalan = {
+    id: number;
+    nomor_surat_jalan: string;
+    no_po: string | null;
+    tanggal: string;
+    status: "draft" | "selesai" | "batal";
+    sppg_id: number | null;
+    armada_id: number | null;
+    driver_id: number | null;
+    sppg?: SppgOption | null;
+    armadaRef?: ArmadaOption | null;
+    driver?: DriverOption | null;
+};
 
-const armadaOptions = [
-    {
-        armada: "Truck Box 01",
-        no_pol: "L 1234 AB",
-    },
-    {
-        armada: "Truck Box 02",
-        no_pol: "W 5678 CD",
-    },
-    {
-        armada: "Pickup 03",
-        no_pol: "N 9988 EF",
-    },
-];
+type FormType = {
+    nomor_surat_jalan: string;
+    no_po: string;
+    tanggal: string;
+    sppg_id: number | null;
+    armada_id: number | null;
+    driver_id: number | null;
+    status: "draft" | "selesai" | "batal";
+};
+
+type FieldErrors = Partial<Record<keyof FormType, string>>;
+
+const initialForm: FormType = {
+    nomor_surat_jalan: "",
+    no_po: "",
+    tanggal: "",
+    sppg_id: null,
+    armada_id: null,
+    driver_id: null,
+    status: "draft",
+};
+
+const formatTanggal = (value: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    });
+};
 
 export default function Page() {
-    const { data: sppgData } = useFetch<any>("/sppg");
-    const { data: armadaData } = useFetch<any>("/armada");
-
     const router = useRouter();
+    const { data, refetch } = useFetch<SuratJalan>("/surat-jalan");
+    const { data: sppgData } = useFetch<SppgOption>("/sppg");
+    const { data: armadaData } = useFetch<ArmadaOption>("/armada");
+    const { data: driverData } = useFetch<DriverOption>("/karyawan");
 
-    const [data, setData] = useState<Product[]>([
-        {
-            id: 1,
-            nomor_surat_jalan: "SJ-001",
-            nama_sppg: "SPPG Surabaya",
-            tanggal: "2026-04-22",
-            no_po: "PO-001",
-            armada: "Truck Box 01",
-            no_pol: "L 1234 AB",
-            nama_driver: "Subandi"
-        }
-    ]);
-
-    const [form, setForm] = useState<FormType>({
-        nomor_surat_jalan: "",
-        nama_sppg: "",
-        tanggal: "",
-        no_po: "",
-        armada: "",
-        no_pol: "",
-        nama_driver: ""
-    });
-
-    const [editId, setEditId] = useState<number | null>(null);
+    const [form, setForm] = useState<FormType>(initialForm);
+    const [editTarget, setEditTarget] = useState<SuratJalan | null>(null);
     const [openForm, setOpenForm] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
-
-    /* ================= FILTER ================= */
+    const [deleteTarget, setDeleteTarget] = useState<SuratJalan | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
     const [search, setSearch] = useState("");
-
-    /* ================= SORT ================= */
-
-    const [sortField, setSortField] =
-        useState<keyof Product>("nomor_surat_jalan");
-
-    const [sortOrder, setSortOrder] =
-        useState<"asc" | "desc">("asc");
-
-
-    /* ================= PAGINATION ================= */
-
+    const [sortField, setSortField] = useState<keyof SuratJalan>("tanggal");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-
-    /* ================= HANDLE ================= */
-
-    const handleSubmit = () => {
-
-        if (
-            !form.nomor_surat_jalan ||
-            !form.nama_sppg ||
-            !form.tanggal ||
-            !form.no_po ||
-            !form.armada ||
-            !form.nama_driver
-        ) return;
-
-        if (editId) {
-            setData(prev =>
-                prev.map(item =>
-                    item.id === editId
-                        ? { ...item, ...form }
-                        : item
-                )
-            );
-        } else {
-            setData(prev => [
-                ...prev,
-                {
-                    id: Date.now(),
-                    ...form
-                }
-            ]);
-        }
-
-        resetForm();
-    };
-
-
-    const handleEdit = (item: Product) => {
-        const { id, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
-        setOpenForm(true);
-    };
-
-
-    const handleDelete = () => {
-        if (deleteId) {
-            setData(prev =>
-                prev.filter(item =>
-                    item.id !== deleteId
-                )
-            );
-            setDeleteId(null);
-        }
-    };
-
-
     const resetForm = () => {
-        setForm({
-            nomor_surat_jalan: "",
-            nama_sppg: "",
-            tanggal: "",
-            no_po: "",
-            armada: "",
-            no_pol: "",
-            nama_driver: ""
-        });
-
-        setEditId(null);
+        setForm(initialForm);
+        setEditTarget(null);
+        setFieldErrors({});
+        setErrorMessage("");
         setOpenForm(false);
     };
 
+    const clearFieldError = (field: keyof FormType) => {
+        setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+        setErrorMessage("");
+    };
 
-    const handleSort = (field: keyof Product) => {
-        if (sortField === field) {
-            setSortOrder(
-                sortOrder === "asc"
-                    ? "desc"
-                    : "asc"
-            );
-        } else {
-            setSortField(field);
-            setSortOrder("asc");
+    const openCreateForm = () => {
+        setForm(initialForm);
+        setEditTarget(null);
+        setFieldErrors({});
+        setErrorMessage("");
+        setSuccessMessage("");
+        setOpenForm(true);
+    };
+
+    const handleEdit = (item: SuratJalan) => {
+        setEditTarget(item);
+        setForm({
+            nomor_surat_jalan: item.nomor_surat_jalan,
+            no_po: item.no_po ?? "",
+            tanggal: item.tanggal,
+            sppg_id: item.sppg_id,
+            armada_id: item.armada_id,
+            driver_id: item.driver_id,
+            status: item.status,
+        });
+        setFieldErrors({});
+        setErrorMessage("");
+        setOpenForm(true);
+    };
+
+    const handleSubmit = async () => {
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nomor_surat_jalan.trim()) nextFieldErrors.nomor_surat_jalan = "Nomor surat jalan wajib diisi.";
+        if (!form.tanggal) nextFieldErrors.tanggal = "Tanggal wajib diisi.";
+        if (!form.status) nextFieldErrors.status = "Status wajib dipilih.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
+            const payload = {
+                nomor_surat_jalan: form.nomor_surat_jalan,
+                no_po: form.no_po || null,
+                tanggal: form.tanggal,
+                sppg_id: form.sppg_id,
+                armada_id: form.armada_id,
+                driver_id: form.driver_id,
+                status: form.status,
+            };
+
+            if (editTarget) {
+                await api.put(`/surat-jalan/${editTarget.id}`, payload);
+                setSuccessMessage("Surat jalan berhasil diperbarui.");
+            } else {
+                await api.post("/surat-jalan", payload);
+                setSuccessMessage("Surat jalan berhasil ditambahkan.");
+            }
+
+            resetForm();
+            await refetch();
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string" && key in initialForm) {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        } finally {
+            setSubmitting(false);
         }
     };
 
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
 
-    /* ================= AUTO NO POL ================= */
-
-    useEffect(() => {
-        const found = armadaOptions.find(
-            item => item.armada === form.armada
-        );
-
-        if (found) {
-            setForm(prev => ({
-                ...prev,
-                no_pol: found.no_pol
-            }));
+        try {
+            setSubmitting(true);
+            await api.delete(`/surat-jalan/${deleteTarget.id}`);
+            setDeleteTarget(null);
+            setErrorMessage("");
+            setSuccessMessage("Surat jalan berhasil dihapus.");
+            await refetch();
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        } finally {
+            setSubmitting(false);
         }
+    };
 
-    }, [form.armada]);
-
-
-    /* ================= FILTER + SORT ================= */
+    const handleSort = (field: keyof SuratJalan) => {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+        setSortField(field);
+        setSortOrder("asc");
+    };
 
     const filteredData = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase();
+        const result = data.filter((item) => {
+            if (!normalizedSearch) return true;
 
-        let result = [...data];
-
-        if (search) {
-            result = result.filter(item =>
-                item.nomor_surat_jalan
-                    .toLowerCase()
-                    .includes(search.toLowerCase()) ||
-
-                item.no_po
-                    .toLowerCase()
-                    .includes(search.toLowerCase())
+            return (
+                item.nomor_surat_jalan.toLowerCase().includes(normalizedSearch) ||
+                (item.no_po ?? "").toLowerCase().includes(normalizedSearch) ||
+                (item.sppg?.nama_sppg ?? "").toLowerCase().includes(normalizedSearch) ||
+                (item.driver?.nama ?? "").toLowerCase().includes(normalizedSearch)
             );
-        }
+        });
 
         result.sort((a, b) => {
-
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
-
-            if (sortOrder === "asc") {
-                return aVal.localeCompare(bVal);
-            }
-
-            return bVal.localeCompare(aVal);
-
+            const aVal = String(a[sortField] ?? "").toLowerCase();
+            const bVal = String(b[sortField] ?? "").toLowerCase();
+            const comparison = aVal.localeCompare(bVal, "id", { numeric: true });
+            return sortOrder === "asc" ? comparison : comparison * -1;
         });
 
         return result;
+    }, [data, search, sortField, sortOrder]);
 
-    }, [
-        data,
-        search,
-        sortField,
-        sortOrder
-    ]);
-
-
-    /* ================= PAGINATION ================= */
-
-    const totalPages = Math.ceil(
-        filteredData.length / perPage
-    );
-
+    const totalPages = Math.ceil(filteredData.length / perPage);
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
 
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
-
+    const selectedArmada = armadaData.find((item) => item.id === form.armada_id) ?? null;
 
     return (
         <div className="p-6 space-y-6">
-
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">
-                    Surat Jalan
-                </h1>
+                <h1 className="text-3xl font-bold">Surat Jalan</h1>
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
 
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari nomor surat jalan / no PO..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button
-                    onClick={() => setOpenForm(true)}
+                    onClick={openCreateForm}
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
                     Tambah Data
                 </button>
-
             </div>
 
-
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
-
                 <table className="w-full text-sm">
-
                     <thead className="bg-white shadow-lg">
                         <tr>
-
                             <th className="p-3">No</th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("nomor_surat_jalan")} className="flex items-center gap-2">
                                     No Surat Jalan
                                     <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3 text-left">SPPG</th>
                             <th className="p-3 text-left">Tanggal</th>
                             <th className="p-3 text-left">No PO</th>
                             <th className="p-3 text-left">Armada</th>
                             <th className="p-3 text-left">No Pol</th>
                             <th className="p-3 text-left">Driver</th>
-
-                            <th className="p-3 text-center">
-                                Aksi
-                            </th>
-
+                            <th className="p-3 text-left">Status</th>
+                            <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
 
                     <tbody>
-
-                        {paginatedData.map((item, index) => (
-
-                            <tr
-                                key={item.id}
-                                className="border-t border-primary/20 hover:bg-white/50"
-                            >
-
-                                <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
+                        {paginatedData.length > 0 ? (
+                            paginatedData.map((item, index) => (
+                                <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
+                                    <td className="p-3 text-center">
+                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                    </td>
+                                    <td className="p-3">{item.nomor_surat_jalan}</td>
+                                    <td className="p-3">{item.sppg?.nama_sppg ?? "-"}</td>
+                                    <td className="p-3">{formatTanggal(item.tanggal)}</td>
+                                    <td className="p-3">{item.no_po ?? "-"}</td>
+                                    <td className="p-3">{item.armadaRef?.nama_unit ?? "-"}</td>
+                                    <td className="p-3">{item.armadaRef?.no_pol ?? "-"}</td>
+                                    <td className="p-3">{item.driver?.nama ?? "-"}</td>
+                                    <td className="p-3 capitalize">{item.status}</td>
+                                    <td className="p-3 flex justify-center gap-2">
+                                        <button
+                                            onClick={() => router.push(`/admin/transaksi-penjualan/surat-jalan/detail/${item.id}`)}
+                                            className="p-2 bg-green-500/30 text-green-700 rounded-md"
+                                        >
+                                            <Eye size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleEdit(item)}
+                                            className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
+                                        >
+                                            <Pencil size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => setDeleteTarget(item)}
+                                            className="p-2 bg-red-500/30 text-red-700 rounded-md"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={10} className="p-6 text-center text-gray-500">
+                                    Belum ada data surat jalan.
                                 </td>
-
-                                <td className="p-3">{item.nomor_surat_jalan}</td>
-                                <td className="p-3">{item.nama_sppg}</td>
-                                <td className="p-3">{item.tanggal}</td>
-                                <td className="p-3">{item.no_po}</td>
-                                <td className="p-3">{item.armada}</td>
-                                <td className="p-3">{item.no_pol}</td>
-                                <td className="p-3">{item.nama_driver}</td>
-
-                                <td className="p-3 flex justify-center gap-2">
-                                    <button
-                                        onClick={() =>
-                                            router.push(
-                                                `/admin/transaksi-penjualan/surat-jalan/detail/${item.id}`
-                                            )
-                                        }
-                                        className="p-2 bg-green-500/30 text-green-700 rounded-md"
-                                    >
-                                        <Eye size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-
-                                </td>
-
                             </tr>
-
-                        ))}
-
+                        )}
                     </tbody>
-
                 </table>
-
             </div>
 
+            <div className="flex justify-end gap-2">
+                <button
+                    disabled={normalizedCurrentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    className="px-3 py-1 border rounded-md"
+                >
+                    Prev
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                    >
+                        {i + 1}
+                    </button>
+                ))}
+
+                <button
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    className="px-3 py-1 border rounded-md"
+                >
+                    Next
+                </button>
+            </div>
 
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
-
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-
                             <h2 className="text-lg font-semibold">
-                                {editId ? "Edit Data" : "Tambah Data"}
+                                {editTarget ? "Edit Data" : "Tambah Data"}
                             </h2>
+
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
 
                             <input
                                 placeholder="Nomor Surat Jalan"
                                 value={form.nomor_surat_jalan}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        nomor_surat_jalan: e.target.value
-                                    })
-                                }
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nomor_surat_jalan: e.target.value });
+                                    clearFieldError("nomor_surat_jalan");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nomor_surat_jalan ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nomor_surat_jalan ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nomor_surat_jalan}</p> : null}
 
-
-                            {/* Selesct SPPG */}
                             <select
-                                value={form.nama_sppg}
-                                onChange={(e) => setForm({ ...form, nama_sppg: e.target.value })}
+                                value={form.sppg_id ?? ""}
+                                onChange={(e) => {
+                                    setForm({ ...form, sppg_id: e.target.value ? Number(e.target.value) : null });
+                                    clearFieldError("sppg_id");
+                                }}
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih SPPG</option>
-                                {sppgData.map((item, i) => (
-                                    <option key={i} value={item.nama_sppg}>
+                                {sppgData.map((item) => (
+                                    <option key={item.id} value={item.id}>
                                         {item.nama_sppg}
                                     </option>
                                 ))}
                             </select>
 
-
                             <input
                                 type="date"
                                 value={form.tanggal}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        tanggal: e.target.value
-                                    })
-                                }
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, tanggal: e.target.value });
+                                    clearFieldError("tanggal");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.tanggal ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
-
+                            {fieldErrors.tanggal ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.tanggal}</p> : null}
 
                             <input
                                 placeholder="No PO"
                                 value={form.no_po}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        no_po: e.target.value
-                                    })
-                                }
+                                onChange={(e) => setForm({ ...form, no_po: e.target.value })}
                                 className="w-full border p-2 rounded-md"
                             />
 
-
-                            {/* Select Armada */}
                             <select
-                                value={form.armada}
+                                value={form.armada_id ?? ""}
                                 onChange={(e) => {
-                                    const selectedArmada = e.target.value;
-
-                                    const selectedData = armadaData.find(
-                                        item => item.nama_unit === selectedArmada
-                                    );
-
-                                    setForm({
-                                        ...form,
-                                        armada: selectedArmada,
-                                        no_pol: selectedData?.no_pol || ""
-                                    });
+                                    setForm({ ...form, armada_id: e.target.value ? Number(e.target.value) : null });
+                                    clearFieldError("armada_id");
                                 }}
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Armada</option>
-
-                                {armadaData.map((item, i) => (
-                                    <option
-                                        key={i}
-                                        value={item.nama_unit}
-                                    >
+                                {armadaData.map((item) => (
+                                    <option key={item.id} value={item.id}>
                                         {item.nama_unit}
                                     </option>
                                 ))}
                             </select>
 
-
                             <input
-                                value={form.no_pol}
+                                value={selectedArmada?.no_pol ?? ""}
                                 readOnly
                                 placeholder="No Polisi Auto"
                                 className="w-full border p-2 rounded-md bg-gray-100"
                             />
 
-
-                            <input
-                                placeholder="Nama Driver"
-                                value={form.nama_driver}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        nama_driver: e.target.value
-                                    })
-                                }
+                            <select
+                                value={form.driver_id ?? ""}
+                                onChange={(e) => {
+                                    setForm({ ...form, driver_id: e.target.value ? Number(e.target.value) : null });
+                                    clearFieldError("driver_id");
+                                }}
                                 className="w-full border p-2 rounded-md"
-                            />
+                            >
+                                <option value="">Pilih Driver</option>
+                                {driverData.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.nama}
+                                    </option>
+                                ))}
+                            </select>
 
+                            <select
+                                value={form.status}
+                                onChange={(e) => {
+                                    setForm({ ...form, status: e.target.value as FormType["status"] });
+                                    clearFieldError("status");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.status ? "border-red-500 focus:outline-red-500" : ""}`}
+                            >
+                                <option value="draft">Draft</option>
+                                <option value="selesai">Selesai</option>
+                                <option value="batal">Batal</option>
+                            </select>
+                            {fieldErrors.status ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.status}</p> : null}
 
                             <div className="flex justify-end gap-2">
-
                                 <button
                                     onClick={resetForm}
                                     className="px-4 py-2 bg-gray-200 rounded-md"
@@ -502,62 +515,48 @@ export default function Page() {
                                 </button>
 
                                 <button
-                                    onClick={handleSubmit}
-                                    className="px-4 py-2 bg-blue-700 text-white rounded-md"
+                                    onClick={() => void handleSubmit()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
                                 >
-                                    Simpan
+                                    {submitting ? "Menyimpan..." : "Simpan"}
                                 </button>
-
                             </div>
-
                         </motion.div>
-
                     </Modal>
                 )}
             </AnimatePresence>
 
-
             <AnimatePresence>
-                {deleteId && (
-                    <Modal onClose={() => setDeleteId(null)}>
-
+                {deleteTarget && (
+                    <Modal onClose={() => setDeleteTarget(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-
-                            <h2 className="text-lg font-semibold">
-                                Hapus Data?
-                            </h2>
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
 
                             <div className="flex justify-center gap-2">
-
                                 <button
-                                    onClick={() => setDeleteId(null)}
+                                    onClick={() => setDeleteTarget(null)}
                                     className="px-4 py-2 bg-gray-200 rounded-md"
                                 >
                                     Batal
                                 </button>
 
                                 <button
-                                    onClick={handleDelete}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md"
+                                    onClick={() => void handleDelete()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md disabled:opacity-50"
                                 >
-                                    Hapus
+                                    {submitting ? "Menghapus..." : "Hapus"}
                                 </button>
-
                             </div>
-
                         </motion.div>
-
                     </Modal>
                 )}
             </AnimatePresence>
-
-
         </div>
-    )
+    );
 }
 
-
-/* MODAL tetap */
 function Modal({
     children,
     onClose,
@@ -565,7 +564,6 @@ function Modal({
     children: React.ReactNode;
     onClose: () => void;
 }) {
-
     return (
         <motion.div
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
@@ -575,6 +573,5 @@ function Modal({
                 {children}
             </div>
         </motion.div>
-    )
-
+    );
 }

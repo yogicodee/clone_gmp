@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 
 import jsPDF from "jspdf";
@@ -16,6 +16,34 @@ import {
     extractErrorMessage,
 } from "@/lib/transaksiPembelian";
 
+type WarehouseStockItem = {
+    nama_barang: string;
+    qty: number | string;
+    satuan_terkecil: string;
+};
+
+function normalizeUnit(value: string) {
+    const normalized = value.trim().toLowerCase();
+
+    if (["pcs", "pc", "piece", "pieces", "piecis", "picis"].includes(normalized)) {
+        return "pcs";
+    }
+
+    if (["kg", "kgs", "kilogram"].includes(normalized)) {
+        return "kg";
+    }
+
+    if (["ltr", "lt", "liter", "litre"].includes(normalized)) {
+        return "liter";
+    }
+
+    return normalized;
+}
+
+function createStockKey(namaBarang: string, satuan: string) {
+    return `${namaBarang.trim().toLowerCase()}|${normalizeUnit(satuan)}`;
+}
+
 /* ================= PAGE ================= */
 export default function Page() {
     const params = useParams<{ id: string }>();
@@ -24,6 +52,7 @@ export default function Page() {
 
     const [detail, setDetail] = useState<DaftarPembelanjaan | null>(null);
     const [items, setItems] = useState<DaftarPembelanjaanItem[]>([]);
+    const [warehouseStockMap, setWarehouseStockMap] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -35,16 +64,22 @@ export default function Page() {
     /* ================= FETCH ================= */
     const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
 
-    async function fetchData() {
+    const fetchData = useCallback(async () => {
         try {
             setLoading(true);
             setError("");
 
-            const [detailRes, supplierRes] = await Promise.all([
+            const [detailRes, supplierRes, stokKeringRes, stokBasahRes] = await Promise.all([
                 api.get<ApiDetailResponse<DaftarPembelanjaan>>(
                     `/daftar-pembelanjaan/${daftarPembelanjaanId}`
                 ),
                 api.get<ApiListResponse<SupplierOption>>("/supplier", {
+                    params: { per_page: 100 },
+                }),
+                api.get<ApiListResponse<WarehouseStockItem>>("/stok-kering", {
+                    params: { per_page: 100 },
+                }),
+                api.get<ApiListResponse<WarehouseStockItem>>("/stok-basah", {
                     params: { per_page: 100 },
                 }),
             ]);
@@ -54,12 +89,25 @@ export default function Page() {
             setDetail(data);
             setItems(data.items ?? []);
             setSupplierOptions(supplierRes.data.data ?? []);
+
+            const stockMap: Record<string, number> = {};
+            const warehouseStocks = [
+                ...(stokKeringRes.data.data ?? []),
+                ...(stokBasahRes.data.data ?? []),
+            ];
+
+            warehouseStocks.forEach((item) => {
+                const key = createStockKey(item.nama_barang, item.satuan_terkecil);
+                stockMap[key] = (stockMap[key] ?? 0) + Number(item.qty || 0);
+            });
+
+            setWarehouseStockMap(stockMap);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }
+    }, [daftarPembelanjaanId]);
 
     const itemsWithSupplier = useMemo(() => {
         return items.map((item) => {
@@ -72,18 +120,19 @@ export default function Page() {
                 nama_supplier: supplier?.nama || "-",
 
                 qty: Number(item.qty) || 0,
-                stok: Number(item.stok) || 0,
+                stok: warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0,
                 kebutuhan: Number(item.kebutuhan) || 0,
             };
         });
-    }, [items, supplierOptions]);
+    }, [items, supplierOptions, warehouseStockMap]);
 
 
     useEffect(() => {
         if (!Number.isNaN(daftarPembelanjaanId)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             void fetchData();
         }
-    }, [daftarPembelanjaanId]);
+    }, [daftarPembelanjaanId, fetchData]);
 
     /* ================= SUPPLIER LIST ================= */
     const suppliers = useMemo(() => {
@@ -101,35 +150,24 @@ export default function Page() {
     }, [itemsWithSupplier]);
 
     /* ================= DEFAULT SUPPLIER ================= */
-    useEffect(() => {
-        if (suppliers.length > 0 && !selectedSupplier) {
-            setSelectedSupplier(suppliers[0].nama_supplier);
-        }
-    }, [suppliers, selectedSupplier]);
+    const activeSelectedSupplier = selectedSupplier ?? suppliers[0]?.nama_supplier ?? null;
 
     /* ================= FILTER + KEBUTUHAN ================= */
     const filteredItems = useMemo(() => {
         return itemsWithSupplier.filter((item) => {
-            if (!selectedSupplier) return true;
-            return item.nama_supplier === selectedSupplier;
+            if (!activeSelectedSupplier) return true;
+            return item.nama_supplier === activeSelectedSupplier;
         });
-    }, [itemsWithSupplier, selectedSupplier]);
+    }, [activeSelectedSupplier, itemsWithSupplier]);
 
     /* ================= PAGINATION ================= */
     const totalPages = Math.max(1, Math.ceil(filteredItems.length / perPage));
+    const normalizedCurrentPage = Math.min(currentPage, totalPages);
 
     const paginatedItems = filteredItems.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [currentPage, totalPages]);
-
-    console.log(items[0]);
 
     // Export PDF
     function handleExportPDF() {
@@ -144,7 +182,7 @@ export default function Page() {
         doc.text(title, 14, 15);
         doc.setFontSize(11);
         doc.text(`Tanggal Pesan: ${tanggal}`, 14, 22);
-        doc.text(`Supplier: ${selectedSupplier ?? "Semua"}`, 14, 28);
+        doc.text(`Supplier: ${activeSelectedSupplier ?? "Semua"}`, 14, 28);
 
         const tableData = filteredItems.map((item, index) => [
             index + 1,
@@ -225,8 +263,11 @@ export default function Page() {
                         {suppliers.map((sup) => (
                             <div
                                 key={sup.nama_supplier}
-                                onClick={() => setSelectedSupplier(sup.nama_supplier)}
-                                className={`p-3 rounded-md cursor-pointer border ${selectedSupplier === sup.nama_supplier
+                                onClick={() => {
+                                    setSelectedSupplier(sup.nama_supplier);
+                                    setCurrentPage(1);
+                                }}
+                                className={`p-3 rounded-md cursor-pointer border ${activeSelectedSupplier === sup.nama_supplier
                                     ? "bg-lime-200 border-green-500"
                                     : "hover:bg-gray-100"
                                     }`}
@@ -241,7 +282,7 @@ export default function Page() {
                 <div className="col-span-2 bg-white rounded-lg shadow p-4">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="font-semibold mb-3">
-                            Detail Barang ({selectedSupplier ?? "Semua"})
+                            Detail Barang ({activeSelectedSupplier ?? "Semua"})
                         </h2>
                         <button
                             onClick={handleExportPDF}
@@ -280,7 +321,7 @@ export default function Page() {
                                 paginatedItems.map((item, index) => (
                                     <tr key={item.id} className="border-t">
                                         <td className="p-2 text-center">
-                                            {(currentPage - 1) * perPage + index + 1}
+                                            {(normalizedCurrentPage - 1) * perPage + index + 1}
                                         </td>
                                         <td className="p-2">{item.nama_barang}</td>
                                         <td className="p-2 text-center">{item.qty}</td>
@@ -298,7 +339,7 @@ export default function Page() {
                     {/* PAGINATION */}
                     <div className="flex justify-end gap-2 mt-4">
                         <button
-                            disabled={currentPage === 1}
+                            disabled={normalizedCurrentPage === 1}
                             onClick={() => setCurrentPage((prev) => prev - 1)}
                             className="px-3 py-1 border rounded-md disabled:opacity-50"
                         >
@@ -309,7 +350,7 @@ export default function Page() {
                             <button
                                 key={i}
                                 onClick={() => setCurrentPage(i + 1)}
-                                className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-blue-500 text-white" : ""
+                                className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-blue-500 text-white" : ""
                                     }`}
                             >
                                 {i + 1}
@@ -317,7 +358,7 @@ export default function Page() {
                         ))}
 
                         <button
-                            disabled={currentPage === totalPages}
+                            disabled={normalizedCurrentPage === totalPages}
                             onClick={() => setCurrentPage((prev) => prev + 1)}
                             className="px-3 py-1 border rounded-md disabled:opacity-50"
                         >

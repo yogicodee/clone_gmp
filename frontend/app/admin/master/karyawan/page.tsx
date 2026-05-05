@@ -5,6 +5,8 @@ import { Pencil, Trash2, Plus, ArrowUpDown, Circle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -18,9 +20,10 @@ type Product = {
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/karyawan"); // Get Data via useFetch
+    const { data, refetch } = useFetch<Product>("/karyawan");
 
     const [form, setForm] = useState<FormType>({
         nama: "",
@@ -42,6 +45,9 @@ export default function Page() {
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -57,19 +63,65 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = async () => {
-        if (!form.nama || !form.alamat || !form.no_hp || !form.jabatan || !form.tanggal_masuk || !form.status) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama.trim()) nextFieldErrors.nama = "Nama wajib diisi.";
+        if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
+        if (!form.no_hp.trim()) {
+            nextFieldErrors.no_hp = "No HP wajib diisi.";
+        } else if (form.no_hp.trim().length < 10) {
+            nextFieldErrors.no_hp = "No HP minimal 10 karakter.";
+        }
+        if (!form.jabatan.trim()) nextFieldErrors.jabatan = "Jabatan wajib dipilih.";
+        if (!form.tanggal_masuk.trim()) nextFieldErrors.tanggal_masuk = "Tanggal masuk wajib diisi.";
+        if (!form.status.trim()) nextFieldErrors.status = "Status wajib dipilih.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/karyawan/${editId}`, form);
+                setSuccessMessage("Karyawan berhasil diperbarui.");
             } else {
                 await api.post("/karyawan", form);
+                setSuccessMessage("Karyawan berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -87,8 +139,11 @@ export default function Page() {
             await api.delete(`/karyawan/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Karyawan berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -101,6 +156,7 @@ export default function Page() {
             tanggal_masuk: "",
             status: "aktif",
         });
+        setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
     };
@@ -162,6 +218,18 @@ export default function Page() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Data Karyawan</h1>
             </div>
+
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
 
             <div className="flex items-center justify-between">
                 <input
@@ -310,13 +378,61 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            <input placeholder="Nama" value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} className="w-full border p-2 rounded-md" />
-                            <input placeholder="Alamat" value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} className="w-full border p-2 rounded-md" />
-                            <input placeholder="No HP" value={form.no_hp} onChange={(e) => setForm({ ...form, no_hp: e.target.value })} className="w-full border p-2 rounded-md" />
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
+                            <input
+                                placeholder="Nama"
+                                value={form.nama}
+                                onChange={(e) => {
+                                    setForm({ ...form, nama: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama ? "border-red-500 focus:outline-red-500" : ""}`}
+                            />
+                            {fieldErrors.nama ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama}</p> : null}
+
+                            <input
+                                placeholder="Alamat"
+                                value={form.alamat}
+                                onChange={(e) => {
+                                    setForm({ ...form, alamat: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, alamat: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.alamat ? "border-red-500 focus:outline-red-500" : ""}`}
+                            />
+                            {fieldErrors.alamat ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.alamat}</p> : null}
+
+                            <input
+                                placeholder="No HP"
+                                value={form.no_hp}
+                                onChange={(e) => {
+                                    setForm({ ...form, no_hp: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, no_hp: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.no_hp ? "border-red-500 focus:outline-red-500" : ""}`}
+                            />
+                            {fieldErrors.no_hp ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.no_hp}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Minimal 10 karakter. Boleh angka, spasi, tanda kurung, `+`, dan `-`.
+                                </p>
+                            )}
                             <select
                                 value={form.jabatan}
-                                onChange={(e) => setForm({ ...form, jabatan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, jabatan: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, jabatan: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.jabatan ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Jabatan</option>
                                 {listJabatan.map((item, i) => (
@@ -325,17 +441,33 @@ export default function Page() {
                                     </option>
                                 ))}
                             </select>
+                            {fieldErrors.jabatan ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.jabatan}</p> : null}
 
-                            <input type="date" value={form.tanggal_masuk} onChange={(e) => setForm({ ...form, tanggal_masuk: e.target.value })} className="w-full border p-2 rounded-md" />
+                            <input
+                                type="date"
+                                value={form.tanggal_masuk}
+                                onChange={(e) => {
+                                    setForm({ ...form, tanggal_masuk: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, tanggal_masuk: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.tanggal_masuk ? "border-red-500 focus:outline-red-500" : ""}`}
+                            />
+                            {fieldErrors.tanggal_masuk ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.tanggal_masuk}</p> : null}
 
                             <select
                                 value={form.status}
-                                onChange={(e) => setForm({ ...form, status: e.target.value as "aktif" | "non aktif" })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, status: e.target.value as "aktif" | "non aktif" });
+                                    setFieldErrors((prev) => ({ ...prev, status: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.status ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="aktif">Aktif</option>
                                 <option value="non aktif">Non Aktif</option>
                             </select>
+                            {fieldErrors.status ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.status}</p> : null}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

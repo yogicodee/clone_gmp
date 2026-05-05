@@ -5,37 +5,41 @@ import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
     id: number;
-    nama_yayasan: string;
+    nama_perusahaan: string;
     alamat: string;
     nama_pic: string;
-    no_pic: string;
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/mitra"); // Get Data via useFetch
+    const { data, refetch } = useFetch<Product>("/perusahaan");
 
     const [form, setForm] = useState<FormType>({
-        nama_yayasan: "",
+        nama_perusahaan: "",
         alamat: "",
         nama_pic: "",
-        no_pic: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
 
     /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Product>("nama_yayasan");
+    const [sortField, setSortField] = useState<keyof Product>("nama_perusahaan");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     /* ================= PAGINATION ================= */
@@ -44,19 +48,58 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
     const handleSubmit = async () => {
-        if (!form.nama_yayasan || !form.alamat || !form.nama_pic || !form.no_pic) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama_perusahaan.trim()) nextFieldErrors.nama_perusahaan = "Nama perusahaan wajib diisi.";
+        if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
+        if (!form.nama_pic.trim()) nextFieldErrors.nama_pic = "Nama PIC wajib diisi.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
-                await api.put(`/mitra/${editId}`, form);
+                await api.put(`/perusahaan/${editId}`, form);
+                setSuccessMessage("Perusahaan berhasil diperbarui.");
             } else {
-                await api.post("/mitra", form);
+                await api.post("/perusahaan", form);
+                setSuccessMessage("Perusahaan berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -71,16 +114,20 @@ export default function Page() {
         if (!deleteId) return;
 
         try {
-            await api.delete(`/mitra/${deleteId}`);
+            await api.delete(`/perusahaan/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Perusahaan berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const resetForm = () => {
-        setForm({ nama_yayasan: "", alamat: "", nama_pic: "", no_pic: "" });
+        setForm({ nama_perusahaan: "", alamat: "", nama_pic: "" });
+        setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
     };
@@ -102,7 +149,7 @@ export default function Page() {
         if (search) {
             result = result.filter(
                 (item) =>
-                    item.nama_yayasan.toLowerCase().includes(search.toLowerCase()) ||
+                    item.nama_perusahaan.toLowerCase().includes(search.toLowerCase()) ||
                     item.alamat.toLowerCase().includes(search.toLowerCase())
             );
         }
@@ -143,9 +190,21 @@ export default function Page() {
                 <h1 className="text-3xl font-bold">Data Perusahaan</h1>
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari nama yayasan atau alamat..."
+                    placeholder="Cari nama perusahaan atau alamat..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
@@ -168,8 +227,8 @@ export default function Page() {
                             <th className="p-3">No</th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("nama_yayasan")} className="flex items-center gap-2">
-                                    Nama Yayasan <ArrowUpDown size={14} />
+                                <button onClick={() => handleSort("nama_perusahaan")} className="flex items-center gap-2">
+                                    Nama Perusahaan <ArrowUpDown size={14} />
                                 </button>
                             </th>
 
@@ -185,12 +244,6 @@ export default function Page() {
                                 </button>
                             </th>
 
-                            <th className="p-3">
-                                <button onClick={() => handleSort("no_pic")} className="flex items-center gap-2">
-                                    No PIC <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -201,10 +254,9 @@ export default function Page() {
                                 <td className="p-3 text-center">
                                     {(currentPage - 1) * perPage + index + 1}
                                 </td>
-                                <td className="p-3">{item.nama_yayasan}</td>
+                                <td className="p-3">{item.nama_perusahaan}</td>
                                 <td className="p-3">{item.alamat}</td>
                                 <td className="p-3">{item.nama_pic}</td>
-                                <td className="p-3">{item.no_pic}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -266,33 +318,47 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
                             <input
-                                placeholder="Nama Yayasan"
-                                value={form.nama_yayasan}
-                                onChange={(e) => setForm({ ...form, nama_yayasan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                placeholder="Nama Perusahaan"
+                                value={form.nama_perusahaan}
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_perusahaan: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_perusahaan: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_perusahaan ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama_perusahaan ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_perusahaan}</p> : null}
 
                             <input
                                 placeholder="Alamat"
                                 value={form.alamat}
-                                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, alamat: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, alamat: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.alamat ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.alamat ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.alamat}</p> : null}
 
                             <input
                                 placeholder="Nama PIC"
                                 value={form.nama_pic}
-                                onChange={(e) => setForm({ ...form, nama_pic: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_pic: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_pic: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_pic ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
-
-                            <input
-                                placeholder="Nomor PIC"
-                                value={form.no_pic}
-                                onChange={(e) => setForm({ ...form, no_pic: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            />
+                            {fieldErrors.nama_pic ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_pic}</p> : null}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

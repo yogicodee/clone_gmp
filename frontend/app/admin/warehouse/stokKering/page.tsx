@@ -1,116 +1,85 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useMemo, useState } from "react";
+import { ArrowUpDown } from "lucide-react";
+import { useFetch } from "@/hooks/useFetch";
 
-/* ================= TYPE ================= */
+type GudangOption = {
+    id: number;
+    nama_gudang: string;
+};
+
 type Product = {
     id: number;
+    gudang_id: number;
+    nama_barang: string;
+    qty: number | string;
+    satuan_terkecil: string;
+    harga_beli: number | string;
+    gudang?: GudangOption | null;
+};
+
+type GroupedProduct = {
+    id: string;
+    gudang_id: number;
     nama_barang: string;
     qty: number;
     satuan_terkecil: string;
     harga_beli: number;
+    gudang?: GudangOption | null;
 };
 
-type FormType = Omit<Product, "id">;
-
 export default function Page() {
-    const [data, setData] = useState<Product[]>([
-        {
-            id: 1,
-            nama_barang: "Beras",
-            qty: 10,
-            satuan_terkecil: "Kg",
-            harga_beli: 12000,
-        },
-    ]);
+    const { data } = useFetch<Product>("/stok-kering");
 
-    const [form, setForm] = useState<FormType>({
-        nama_barang: "",
-        qty: 0,
-        satuan_terkecil: "",
-        harga_beli: 0,
-    });
-
-    const [editId, setEditId] = useState<number | null>(null);
-    const [openForm, setOpenForm] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
-
-    /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
-
-    /* ================= SORT ================= */
     const [sortField, setSortField] = useState<keyof Product>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-
-    /* ================= PAGINATION ================= */
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    /* ================= HANDLE ================= */
+    const groupedData = useMemo<GroupedProduct[]>(() => {
+        const groupedMap = new Map<string, GroupedProduct>();
 
-    const handleSubmit = () => {
-        if (!form.nama_barang) return;
+        for (const item of data) {
+            const hargaBeli = Number(item.harga_beli);
+            const qty = Number(item.qty);
+            const key = [
+                item.nama_barang.trim().toLowerCase(),
+                item.gudang_id,
+                item.satuan_terkecil.trim().toLowerCase(),
+                hargaBeli,
+            ].join("|");
 
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...form } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...form },
-            ]);
+            const existing = groupedMap.get(key);
+
+            if (existing) {
+                existing.qty += qty;
+                continue;
+            }
+
+            groupedMap.set(key, {
+                id: key,
+                gudang_id: item.gudang_id,
+                nama_barang: item.nama_barang,
+                qty,
+                satuan_terkecil: item.satuan_terkecil,
+                harga_beli: hargaBeli,
+                gudang: item.gudang ?? null,
+            });
         }
 
-        resetForm();
-    };
-
-    const handleEdit = (item: Product) => {
-        const { id, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
-        setOpenForm(true);
-    };
-
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
-            setDeleteId(null);
-        }
-    };
-
-    const resetForm = () => {
-        setForm({
-            nama_barang: "",
-            qty: 0,
-            satuan_terkecil: "",
-            harga_beli: 0,
-        });
-        setEditId(null);
-        setOpenForm(false);
-    };
-
-    const handleSort = (field: keyof Product) => {
-        if (sortField === field) {
-            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-        } else {
-            setSortField(field);
-            setSortOrder("asc");
-        }
-    };
-
-    /* ================= FILTER + SORT ================= */
+        return Array.from(groupedMap.values());
+    }, [data]);
 
     const filteredData = useMemo(() => {
-        let result = [...data];
+        let result = [...groupedData];
 
         if (search) {
-            result = result.filter((item) =>
-                item.nama_barang.toLowerCase().includes(search.toLowerCase())
+            result = result.filter(
+                (item) =>
+                    item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
+                    item.gudang?.nama_gudang?.toLowerCase().includes(search.toLowerCase())
             );
         }
 
@@ -123,26 +92,24 @@ export default function Page() {
         });
 
         return result;
-    }, [data, search, sortField, sortOrder]);
-
-    /* ================= PAGINATION ================= */
+    }, [groupedData, search, sortField, sortOrder]);
 
     const totalPages = Math.ceil(filteredData.length / perPage);
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
 
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
+    const handleSort = (field: keyof Product) => {
+        if (sortField === field) {
+            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+        } else {
+            setSortField(field);
+            setSortOrder("asc");
         }
-    }, [filteredData]);
+    };
 
     return (
         <div className="p-6 space-y-6">
@@ -152,26 +119,31 @@ export default function Page() {
 
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari barang..."
+                    placeholder="Cari barang atau gudang..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
                                     Nama Barang <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
+                            <th className="p-3">
+                                <button onClick={() => handleSort("gudang_id")} className="flex items-center gap-2">
+                                    Gudang <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-left">Qty</th>
                             <th className="p-3 text-left">Satuan</th>
                             <th className="p-3 text-left">Harga Beli</th>
@@ -179,28 +151,35 @@ export default function Page() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
-                                <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
-                                </td>
-
-                                <td className="p-3">{item.nama_barang}</td>
-                                <td className="p-3">{item.qty}</td>
-                                <td className="p-3">{item.satuan_terkecil}</td>
-                                <td className="p-3">
-                                    Rp {Number(item.harga_beli).toLocaleString("id-ID")}
+                        {paginatedData.length > 0 ? (
+                            paginatedData.map((item, index) => (
+                                <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
+                                    <td className="p-3 text-center">
+                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                    </td>
+                                    <td className="p-3">{item.nama_barang}</td>
+                                    <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
+                                    <td className="p-3">{Number(item.qty)}</td>
+                                    <td className="p-3">{item.satuan_terkecil}</td>
+                                    <td className="p-3">
+                                        Rp {Number(item.harga_beli).toLocaleString("id-ID")}
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={6} className="p-6 text-center text-gray-500">
+                                    Belum ada data stok kering.
                                 </td>
                             </tr>
-                        ))}
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >
@@ -211,24 +190,20 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border border-white rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border border-white rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >
                     Next
                 </button>
             </div>
-
-
-
-
         </div>
     );
 }

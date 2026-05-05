@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -16,9 +18,10 @@ type Product = {
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/bank-rekening"); // Get Data via useFetch
+    const { data, refetch } = useFetch<Product>("/bank-rekening");
 
     const [form, setForm] = useState<FormType>({
         nama_bank: "",
@@ -30,6 +33,9 @@ export default function Page() {
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -43,27 +49,72 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
-
     const handleSubmit = async () => {
-        if (!form.nama_bank || !form.no_rek || !form.atas_nama || !form.cabang) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama_bank.trim()) nextFieldErrors.nama_bank = "Nama bank wajib diisi.";
+        if (!form.no_rek.trim()) {
+            nextFieldErrors.no_rek = "No rekening wajib diisi.";
+        } else if (form.no_rek.trim().length < 5) {
+            nextFieldErrors.no_rek = "No rekening minimal 5 digit.";
+        }
+        if (!form.atas_nama.trim()) nextFieldErrors.atas_nama = "Atas nama rekening wajib diisi.";
+        if (!form.cabang.trim()) nextFieldErrors.cabang = "Cabang wajib diisi.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/bank-rekening/${editId}`, form);
+                setSuccessMessage("Bank dan rekening berhasil diperbarui.");
             } else {
                 await api.post("/bank-rekening", form);
+                setSuccessMessage("Bank dan rekening berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const handleEdit = (item: Product) => {
         const { id, ...rest } = item;
         setForm(rest);
+        setFieldErrors({});
+        setErrorMessage("");
         setEditId(id);
         setOpenForm(true);
     };
@@ -75,13 +126,18 @@ export default function Page() {
             await api.delete(`/bank-rekening/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Bank dan rekening berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const resetForm = () => {
         setForm({ nama_bank: "", no_rek: "", atas_nama: "", cabang: "" });
+        setFieldErrors({});
+        setErrorMessage("");
         setEditId(null);
         setOpenForm(false);
     };
@@ -96,7 +152,6 @@ export default function Page() {
     };
 
     /* ================= FILTER + SORT ================= */
-
     const filteredData = useMemo(() => {
         let result = [...data];
 
@@ -121,23 +176,14 @@ export default function Page() {
     }, [data, search, sortField, sortOrder]);
 
     /* ================= PAGINATION ================= */
-
     const totalPages = Math.ceil(filteredData.length / perPage);
 
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
+
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [filteredData]);
 
     return (
         <div className="p-6 space-y-6">
@@ -145,16 +191,35 @@ export default function Page() {
                 <h1 className="text-3xl font-bold">Data Bank & Rekening</h1>
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari bank / no rekening / atas nama..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button
-                    onClick={() => setOpenForm(true)}
+                    onClick={() => {
+                        setSuccessMessage("");
+                        setErrorMessage("");
+                        setOpenForm(true);
+                    }}
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
@@ -162,37 +227,31 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_bank")} className="flex items-center gap-2">
                                     Nama Bank <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("no_rek")} className="flex items-center gap-2">
                                     No Rekening <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("atas_nama")} className="flex items-center gap-2">
                                     A.N Rekening <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3">
                                 <button onClick={() => handleSort("cabang")} className="flex items-center gap-2">
                                     Cabang <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -201,13 +260,12 @@ export default function Page() {
                         {paginatedData.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
+                                    {(normalizedCurrentPage - 1) * perPage + index + 1}
                                 </td>
                                 <td className="p-3">{item.nama_bank}</td>
                                 <td className="p-3">{item.no_rek}</td>
                                 <td className="p-3">{item.atas_nama}</td>
                                 <td className="p-3">{item.cabang}</td>
-
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
                                         onClick={() => handleEdit(item)}
@@ -229,10 +287,9 @@ export default function Page() {
                 </table>
             </div>
 
-            {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -243,15 +300,14 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -259,7 +315,6 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* FORM MODAL */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
@@ -268,33 +323,65 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
                             <input
                                 placeholder="Nama Bank"
                                 value={form.nama_bank}
-                                onChange={(e) => setForm({ ...form, nama_bank: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_bank: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_bank: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_bank ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama_bank ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_bank}</p> : null}
 
                             <input
                                 placeholder="No Rekening"
                                 value={form.no_rek}
-                                onChange={(e) => setForm({ ...form, no_rek: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, no_rek: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, no_rek: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.no_rek ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.no_rek ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.no_rek}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Minimal 5 digit dan hanya boleh berisi angka.
+                                </p>
+                            )}
 
                             <input
                                 placeholder="Atas Nama Rekening"
                                 value={form.atas_nama}
-                                onChange={(e) => setForm({ ...form, atas_nama: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, atas_nama: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, atas_nama: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.atas_nama ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.atas_nama ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.atas_nama}</p> : null}
 
                             <input
                                 placeholder="Cabang"
                                 value={form.cabang}
-                                onChange={(e) => setForm({ ...form, cabang: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, cabang: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, cabang: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.cabang ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.cabang ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.cabang}</p> : null}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
@@ -310,7 +397,6 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE MODAL tetap sama */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
@@ -342,7 +428,6 @@ export default function Page() {
     );
 }
 
-/* ================= MODAL ================= */
 function Modal({
     children,
     onClose,

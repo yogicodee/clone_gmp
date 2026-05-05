@@ -227,11 +227,6 @@ export default function Page() {
                                 />
                             </div>
 
-                            <p className="text-sm text-gray-600">
-                                Saat disimpan, backend akan mengambil semua order penawaran pada tanggal ini lalu
-                                menggabungkan barang yang sama ke daftar pembelanjaan.
-                            </p>
-
                             <div className="flex justify-end gap-2">
                                 <button
                                     onClick={() => setOpenForm(false)}

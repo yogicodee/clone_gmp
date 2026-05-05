@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
+const DEFAULT_PRODUCT_CATEGORY = "Umum";
+
 type Product = {
     id: number;
     sku: string;
@@ -15,27 +19,31 @@ type Product = {
     satuan: string;
 };
 
+type UnitOption = {
+    id: number;
+    kode: string;
+};
+
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/produk"); // Get Data via useFetch
-    const { data: mitraData } = useFetch<any>("/kategori");
-
-    const [listKategori, setListKategori] = useState([
-        "Kering",
-        "Basah",
-    ]);
+    const { data, refetch } = useFetch<Product>("/produk");
+    const { data: mitraData } = useFetch<UnitOption>("/kategori");
 
     const [form, setForm] = useState<FormType>({
         sku: "",
         nama: "",
-        kategori: "",
+        kategori: DEFAULT_PRODUCT_CATEGORY,
         satuan: "",
     });
 
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -50,19 +58,62 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
     const handleSubmit = async () => {
-        if (!form.sku || !form.nama || !form.kategori || !form.satuan) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.sku.trim()) {
+            nextFieldErrors.sku = "SKU wajib diisi.";
+        } else if (!/^[A-Z0-9-]+$/.test(form.sku.trim())) {
+            nextFieldErrors.sku = "SKU hanya boleh berisi huruf kapital, angka, dan tanda minus (-).";
+        }
+        if (!form.nama.trim()) nextFieldErrors.nama = "Nama wajib diisi.";
+        if (!form.satuan.trim()) nextFieldErrors.satuan = "Satuan wajib dipilih.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/produk/${editId}`, form);
+                setSuccessMessage("Produk berhasil diperbarui.");
             } else {
                 await api.post("/produk", form);
+                setSuccessMessage("Produk berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -80,13 +131,17 @@ export default function Page() {
             await api.delete(`/produk/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Produk berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const resetForm = () => {
-        setForm({ sku: "", nama: "", kategori: "", satuan: "" });
+        setForm({ sku: "", nama: "", kategori: DEFAULT_PRODUCT_CATEGORY, satuan: "" });
+        setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
     };
@@ -128,21 +183,12 @@ export default function Page() {
     /* ================= PAGINATION ================= */
 
     const totalPages = Math.ceil(filteredData.length / perPage);
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
 
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [filteredData]);
 
     return (
         <div className="p-6 space-y-6">
@@ -150,11 +196,26 @@ export default function Page() {
                 <h1 className="text-3xl font-bold">Data Barang</h1>
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari nama / kategori / SKU..."
+                    placeholder="Cari nama / SKU..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
@@ -187,12 +248,6 @@ export default function Page() {
                             </th>
 
                             <th className="p-3">
-                                <button onClick={() => handleSort("kategori")} className="flex items-center gap-2">
-                                    Kategori <ArrowUpDown size={14} />
-                                </button>
-                            </th>
-
-                            <th className="p-3">
                                 <button onClick={() => handleSort("satuan")} className="flex items-center gap-2">
                                     Satuan <ArrowUpDown size={14} />
                                 </button>
@@ -206,11 +261,10 @@ export default function Page() {
                         {paginatedData.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
+                                    {(normalizedCurrentPage - 1) * perPage + index + 1}
                                 </td>
                                 <td className="p-3 font-semibold">{item.sku}</td>
                                 <td className="p-3">{item.nama}</td>
-                                <td className="p-3">{item.kategori}</td>
                                 <td className="p-3">{item.satuan}</td>
 
                                 <td className="p-3 flex justify-center gap-2">
@@ -237,7 +291,7 @@ export default function Page() {
             {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -248,7 +302,7 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""
                             }`}
                     >
                         {i + 1}
@@ -256,7 +310,7 @@ export default function Page() {
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -273,49 +327,60 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
                             <input
                                 placeholder="SKU"
                                 value={form.sku}
-                                onChange={(e) =>
-                                    setForm({ ...form, sku: e.target.value.toUpperCase() })
-                                }
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, sku: e.target.value.toUpperCase() });
+                                    setFieldErrors((prev) => ({ ...prev, sku: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.sku ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.sku ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.sku}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Hanya huruf kapital, angka, dan tanda minus (-).
+                                </p>
+                            )}
 
                             <input
                                 placeholder="Nama"
                                 value={form.nama}
-                                onChange={(e) => setForm({ ...form, nama: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
-
-                            {/* Selesct Kategori */}
-                            <select
-                                value={form.kategori}
-                                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            >
-                                <option value="">Pilih Kategori</option>
-                                {listKategori.map((item, i) => (
-                                    <option key={i} value={item}>
-                                        {item}
-                                    </option>
-                                ))}
-                            </select>
+                            {fieldErrors.nama ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama}</p> : null}
 
                             {/* Selesct Satuan */}
                             <select
                                 value={form.satuan}
-                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, satuan: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, satuan: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.satuan ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Satuan</option>
-                                {mitraData.map((item: any) => (
+                                {mitraData.map((item) => (
                                     <option key={item.id} value={item.kode}>
                                         {item.kode}
                                     </option>
                                 ))}
                             </select>
+                            {fieldErrors.satuan ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.satuan}</p> : null}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

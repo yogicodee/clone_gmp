@@ -1,163 +1,318 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
-
-import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage, formatCurrency } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
-/* ================= HELPER ================= */
-const formatRupiah = (value: number | string) => {
-    const number = Number(value || 0);
-    return new Intl.NumberFormat("id-ID").format(number);
-};
-
-
-/* ================= TYPE ================= */
-type Item = {
+type GudangOption = {
     id: number;
-    nama_barang: string;
     nama_gudang: string;
-    qty: number;
-    harga_satuan: number;
-    total: number;
 };
 
-type FormType = Omit<Item, "id" | "total">;
+type PenjualanSource = {
+    id: number;
+    tanggal_dikirim: string | null;
+    nama_pembeli: string;
+    keterangan: string | null;
+};
+
+type PenjualanDetail = {
+    id: number;
+    order_penawaran_id: number | null;
+    kode_penjualan: string;
+    tanggal: string;
+    status: "draft" | "selesai" | "batal";
+    total_harga: string | number;
+    orderPenawaran?: PenjualanSource | null;
+};
+
+type PenjualanItem = {
+    id: number;
+    penjualan_id: number | null;
+    order_penawaran_item_id: number;
+    produk_id: number | null;
+    gudang_id: number | null;
+    gudang?: GudangOption | null;
+    nama_barang: string;
+    qty: number | string;
+    satuan: string;
+    harga_satuan: number | string;
+    total_harga: number | string;
+    keterangan?: string | null;
+};
+
+type OpsiBarang = {
+    order_penawaran_item_id: number;
+    produk_id: number | null;
+    nama_barang: string;
+    harga_satuan: number | string;
+    satuan: string;
+};
+
+type FormType = {
+    order_penawaran_item_id: number | null;
+    gudang_id: number | null;
+    qty: string;
+};
+
+type FieldErrors = Partial<Record<keyof FormType, string>>;
+
+const initialForm: FormType = {
+    order_penawaran_item_id: null,
+    gudang_id: null,
+    qty: "",
+};
+
+const formatTanggal = (value: string) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    });
+};
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Item>("/produk"); // Get Data via useFetch
-    const { data: barangData } = useFetch<any>("/produk");
-
-    const [form, setForm] = useState<any>({
-        nama_barang: "",
-        nama_gudang: "",
-        qty: "",
-        harga_satuan: "",
-    });
-
-    const [editId, setEditId] = useState<number | null>(null);
-    const [openForm, setOpenForm] = useState(false);
-    const [deleteId, setDeleteId] = useState<number | null>(null);
-
     const router = useRouter();
-    const params = useParams();
+    const params = useParams<{ id: string }>();
+    const penjualanId = Number(params.id);
 
-    /* ================= FILTER ================= */
+    const [detail, setDetail] = useState<PenjualanDetail | null>(null);
+    const [items, setItems] = useState<PenjualanItem[]>([]);
+    const [opsiBarang, setOpsiBarang] = useState<OpsiBarang[]>([]);
+    const [gudangOptions, setGudangOptions] = useState<GudangOption[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+    const [form, setForm] = useState<FormType>(initialForm);
+    const [editTarget, setEditTarget] = useState<PenjualanItem | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<PenjualanItem | null>(null);
+    const [openForm, setOpenForm] = useState(false);
+
     const [search, setSearch] = useState("");
-
-    /* ================= SORT ================= */
-    const [sortField, setSortField] = useState<keyof Item>("nama_barang");
+    const [sortField, setSortField] = useState<keyof PenjualanItem>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-
-    /* ================= PAGINATION ================= */
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    /* ================= HANDLE ================= */
+    const fetchData = useCallback(async () => {
+        try {
+            setLoading(true);
+            setErrorMessage("");
 
-    const handleSubmit = () => {
-        if (!form.nama_barang) return;
-
-        const newData = {
-            ...form,
-            total: form.qty * form.harga_satuan,
-        };
-
-        if (editId) {
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === editId ? { ...item, ...newData } : item
-                )
-            );
-        } else {
-            setData((prev) => [
-                ...prev,
-                { id: Date.now(), ...newData },
+            const [detailResponse, itemsResponse, opsiResponse, gudangResponse] = await Promise.all([
+                api.get(`/penjualan/${penjualanId}`),
+                api.get(`/penjualan/${penjualanId}/items`),
+                api.get(`/penjualan/${penjualanId}/opsi-barang`),
+                api.get("/gudang", { params: { per_page: 100 } }),
             ]);
+
+            setDetail(detailResponse.data.data);
+            setItems(itemsResponse.data.data ?? []);
+            setOpsiBarang(opsiResponse.data.data ?? []);
+            setGudangOptions(gudangResponse.data.data ?? []);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoading(false);
         }
+    }, [penjualanId]);
 
-        resetForm();
-    };
-
-    const handleEdit = (item: Item) => {
-        const { id, total, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
-        setOpenForm(true);
-    };
-
-    const handleDelete = () => {
-        if (deleteId) {
-            setData((prev) => prev.filter((item) => item.id !== deleteId));
-            setDeleteId(null);
+    useEffect(() => {
+        if (!Number.isNaN(penjualanId)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            void fetchData();
         }
-    };
+    }, [fetchData, penjualanId]);
 
     const resetForm = () => {
-        setForm({
-            nama_barang: "",
-            nama_gudang: "",
-            qty: "",
-            harga_satuan: "",
-        });
-        setEditId(null);
+        setForm(initialForm);
+        setEditTarget(null);
+        setFieldErrors({});
+        setErrorMessage("");
         setOpenForm(false);
     };
 
-    const handleSort = (field: keyof Item) => {
-        if (sortField === field) {
-            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-        } else {
-            setSortField(field);
-            setSortOrder("asc");
+    const openCreateForm = () => {
+        setForm(initialForm);
+        setEditTarget(null);
+        setFieldErrors({});
+        setErrorMessage("");
+        setSuccessMessage("");
+        setOpenForm(true);
+    };
+
+    const clearFieldError = (field: keyof FormType) => {
+        setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+        setErrorMessage("");
+    };
+
+    const handleEdit = (item: PenjualanItem) => {
+        if (item.penjualan_id === null) {
+            setErrorMessage("Item bawaan order belum menjadi item penjualan. Tambahkan lewat form terlebih dahulu.");
+            return;
+        }
+
+        setEditTarget(item);
+        setForm({
+            order_penawaran_item_id: item.order_penawaran_item_id,
+            gudang_id: item.gudang_id,
+            qty: String(Number(item.qty)),
+        });
+        setFieldErrors({});
+        setErrorMessage("");
+        setOpenForm(true);
+    };
+
+    const handleSubmit = async () => {
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.order_penawaran_item_id) nextFieldErrors.order_penawaran_item_id = "Barang wajib dipilih.";
+        if (!form.gudang_id) nextFieldErrors.gudang_id = "Gudang wajib dipilih.";
+        if (!form.qty.trim()) {
+            nextFieldErrors.qty = "Qty wajib diisi.";
+        } else if (Number(form.qty) <= 0) {
+            nextFieldErrors.qty = "Qty harus lebih dari 0.";
+        }
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
+            const payload = {
+                order_penawaran_item_id: form.order_penawaran_item_id,
+                gudang_id: form.gudang_id,
+                qty: Number(form.qty),
+            };
+
+            if (editTarget) {
+                await api.put(`/penjualan/${penjualanId}/items/${editTarget.id}`, payload);
+                setSuccessMessage("Item penjualan berhasil diperbarui.");
+            } else {
+                await api.post(`/penjualan/${penjualanId}/items`, payload);
+                setSuccessMessage("Item penjualan berhasil ditambahkan.");
+            }
+
+            resetForm();
+            await fetchData();
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string" && key in initialForm) {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        } finally {
+            setSubmitting(false);
         }
     };
 
-    /* ================= FILTER + SORT ================= */
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+
+        try {
+            setSubmitting(true);
+            await api.delete(`/penjualan/${penjualanId}/items/${deleteTarget.id}`);
+            setDeleteTarget(null);
+            setErrorMessage("");
+            setSuccessMessage("Item penjualan berhasil dihapus.");
+            await fetchData();
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const selectedBarang = useMemo(
+        () => opsiBarang.find((item) => item.order_penawaran_item_id === form.order_penawaran_item_id) ?? null,
+        [form.order_penawaran_item_id, opsiBarang]
+    );
 
     const filteredData = useMemo(() => {
-        let result = [...data];
+        const normalizedSearch = search.trim().toLowerCase();
+        const result = items.filter((item) => {
+            if (!normalizedSearch) return true;
 
-        if (search) {
-            result = result.filter((item) =>
-                item.nama_barang.toLowerCase().includes(search.toLowerCase())
-            );
-        }
+            return item.nama_barang.toLowerCase().includes(normalizedSearch);
+        });
 
         result.sort((a, b) => {
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
-
-            if (sortOrder === "asc") return aVal.localeCompare(bVal);
-            return bVal.localeCompare(aVal);
+            const aVal = String(a[sortField] ?? "").toLowerCase();
+            const bVal = String(b[sortField] ?? "").toLowerCase();
+            const comparison = aVal.localeCompare(bVal, "id", { numeric: true });
+            return sortOrder === "asc" ? comparison : comparison * -1;
         });
 
         return result;
-    }, [data, search, sortField, sortOrder]);
-
-    /* ================= PAGINATION ================= */
+    }, [items, search, sortField, sortOrder]);
 
     const totalPages = Math.ceil(filteredData.length / perPage);
-
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
+    const handleSort = (field: keyof PenjualanItem) => {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+
+        setSortField(field);
+        setSortOrder("asc");
+    };
 
     return (
         <div className="p-6 space-y-6">
-            {/* HEADER */}
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">
-                    Detail Penjualan #{params.id}
-                </h1>
+                <div>
+                    <h1 className="text-3xl font-bold">Detail Penjualan #{penjualanId}</h1>
+                    {detail ? (
+                        <p className="text-sm text-gray-600 mt-1">
+                            {detail.kode_penjualan} | {detail.orderPenawaran?.nama_pembeli ?? "Manual"} | {formatTanggal(detail.tanggal)}
+                        </p>
+                    ) : null}
+                </div>
 
                 <button
                     onClick={() => router.back()}
@@ -167,16 +322,31 @@ export default function Page() {
                 </button>
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
+
             <div className="flex justify-between">
                 <input
                     placeholder="Cari barang..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button
-                    onClick={() => setOpenForm(true)}
+                    onClick={openCreateForm}
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary text-white px-4 py-2 rounded-lg"
                 >
                     <Plus size={16} />
@@ -184,126 +354,198 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3 text-left">Barang</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
+                                    Barang <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-left">Gudang</th>
-                            <th className="p-3 text-left">Qty</th>
-                            <th className="p-3 text-left">Harga</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("qty")} className="flex items-center gap-2">
+                                    Qty <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3 text-left">Satuan</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("harga_satuan")} className="flex items-center gap-2">
+                                    Harga <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-left">Total</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((item, index) => (
-                            <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
-                                <td className="p-3 text-center">{index + 1}</td>
-                                <td className="p-3">{item.nama_barang}</td>
-                                <td className="p-3">{item.nama_gudang}</td>
-                                <td className="p-3">{item.qty}</td>
-                                <td className="p-3">
-                                    Rp {formatRupiah(item.harga_satuan)}
-                                </td>
-                                <td className="p-3">
-                                    Rp {formatRupiah(item.total)}
-                                </td>
-
-                                <td className="p-3 flex justify-center gap-2">
-                                    <button
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 bg-blue-500/30 text-blue-700 rounded"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => setDeleteId(item.id)}
-                                        className="p-2 bg-red-500/30 text-red-700 rounded"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                        {loading ? (
+                            <tr>
+                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                    Memuat data...
                                 </td>
                             </tr>
-                        ))}
+                        ) : paginatedData.length > 0 ? (
+                            paginatedData.map((item, index) => (
+                                <tr key={`${item.penjualan_id ?? "source"}-${item.id}`} className="border-t border-primary/20 hover:bg-white/50">
+                                    <td className="p-3 text-center">{(normalizedCurrentPage - 1) * perPage + index + 1}</td>
+                                    <td className="p-3">{item.nama_barang}</td>
+                                    <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
+                                    <td className="p-3">{Number(item.qty)}</td>
+                                    <td className="p-3">{item.satuan}</td>
+                                    <td className="p-3">Rp {formatCurrency(Number(item.harga_satuan))}</td>
+                                    <td className="p-3">Rp {formatCurrency(Number(item.total_harga))}</td>
+                                    <td className="p-3 flex justify-center gap-2">
+                                        <button
+                                            onClick={() => handleEdit(item)}
+                                            className="p-2 bg-blue-500/30 text-blue-700 rounded"
+                                        >
+                                            <Pencil size={14} />
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                if (item.penjualan_id === null) {
+                                                    setErrorMessage("Item bawaan order belum menjadi item penjualan, jadi belum bisa dihapus.");
+                                                    return;
+                                                }
+                                                setDeleteTarget(item);
+                                            }}
+                                            className="p-2 bg-red-500/30 text-red-700 rounded"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                    Belum ada item penjualan.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            {/* FORM */}
+            <div className="flex justify-end gap-2">
+                <button
+                    disabled={normalizedCurrentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    className="px-3 py-1 border rounded-md"
+                >
+                    Prev
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                    >
+                        {i + 1}
+                    </button>
+                ))}
+
+                <button
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    className="px-3 py-1 border rounded-md"
+                >
+                    Next
+                </button>
+            </div>
+
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
                             <h2 className="text-lg font-semibold">
-                                {editId ? "Edit Data" : "Tambah Data"}
+                                {editTarget ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            {/* SELECT BARANG */}
-                            <select
-                                value={form.nama_barang}
-                                onChange={(e) => {
-                                    const selected = barangList.find(
-                                        (b) => b.nama === e.target.value
-                                    );
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
 
+                            <select
+                                value={form.order_penawaran_item_id ?? ""}
+                                onChange={(e) => {
                                     setForm({
                                         ...form,
-                                        nama_barang: e.target.value,
-                                        harga_satuan: selected?.harga || 0,
+                                        order_penawaran_item_id: e.target.value ? Number(e.target.value) : null,
                                     });
+                                    clearFieldError("order_penawaran_item_id");
                                 }}
-                                className="w-full border p-2 rounded-md"
+                                disabled={editTarget !== null}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.order_penawaran_item_id ? "border-red-500 focus:outline-red-500" : ""} ${editTarget ? "bg-slate-50 text-slate-500" : ""}`}
                             >
                                 <option value="">Pilih Barang</option>
-                                {barangList.map((b, i) => (
-                                    <option key={i} value={b.nama}>
-                                        {b.nama}
+                                {opsiBarang.map((item) => (
+                                    <option key={item.order_penawaran_item_id} value={item.order_penawaran_item_id}>
+                                        {item.nama_barang} - {item.satuan} - Rp {formatCurrency(Number(item.harga_satuan))}
                                     </option>
                                 ))}
                             </select>
+                            {fieldErrors.order_penawaran_item_id ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.order_penawaran_item_id}</p>
+                            ) : null}
+
+                            {selectedBarang ? (
+                                <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                    Harga sumber: <span className="font-semibold">{formatCurrency(Number(selectedBarang.harga_satuan))}</span>
+                                    {" | "}
+                                    Satuan: <span className="font-semibold">{selectedBarang.satuan}</span>
+                                </div>
+                            ) : null}
+
+                            <select
+                                value={form.gudang_id ?? ""}
+                                onChange={(e) => {
+                                    setForm({
+                                        ...form,
+                                        gudang_id: e.target.value ? Number(e.target.value) : null,
+                                    });
+                                    clearFieldError("gudang_id");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.gudang_id ? "border-red-500 focus:outline-red-500" : ""}`}
+                            >
+                                <option value="">Pilih Gudang</option>
+                                {gudangOptions.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.nama_gudang}
+                                    </option>
+                                ))}
+                            </select>
+                            {fieldErrors.gudang_id ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.gudang_id}</p> : null}
 
                             <input
                                 type="number"
+                                min="1"
                                 placeholder="Masukkan Qty"
                                 value={form.qty}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        qty: e.target.value === "" ? "" : Number(e.target.value),
-                                    })
-                                }
-                                className="w-full border p-2 rounded-md"
-                            />
-
-                            <input
-                                placeholder="Masukkan Harga"
-                                value={
-                                    form.harga_satuan
-                                        ? formatRupiah(form.harga_satuan)
-                                        : ""
-                                }
                                 onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
                                     setForm({
                                         ...form,
-                                        harga_satuan: raw === "" ? "" : Number(raw),
+                                        qty: e.target.value,
                                     });
+                                    clearFieldError("qty");
                                 }}
-                                className="w-full border p-2 rounded-md"
+                                className={`w-full border p-2 rounded-md ${fieldErrors.qty ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.qty ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.qty}</p> : null}
 
-                            {/* TOTAL REALTIME */}
                             <div className="text-right font-semibold">
-                                Total: Rp{" "}
-                                {formatRupiah(
-                                    (Number(form.qty) || 0) *
-                                    (Number(form.harga_satuan) || 0)
-                                )}
+                                Total:{" "}
+                                {selectedBarang
+                                    ? `Rp ${formatCurrency(Number(form.qty || 0) * Number(selectedBarang.harga_satuan))}`
+                                    : "Rp 0"}
                             </div>
 
                             <div className="flex justify-end gap-2">
@@ -315,10 +557,11 @@ export default function Page() {
                                 </button>
 
                                 <button
-                                    onClick={handleSubmit}
-                                    className="px-4 py-2 bg-blue-700 text-white rounded-md"
+                                    onClick={() => void handleSubmit()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
                                 >
-                                    Simpan
+                                    {submitting ? "Menyimpan..." : "Simpan"}
                                 </button>
                             </div>
                         </motion.div>
@@ -326,28 +569,26 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE */}
             <AnimatePresence>
-                {deleteId && (
-                    <Modal onClose={() => setDeleteId(null)}>
+                {deleteTarget && (
+                    <Modal onClose={() => setDeleteTarget(null)}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                Hapus Data?
-                            </h2>
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
 
                             <div className="flex justify-center gap-2">
                                 <button
-                                    onClick={() => setDeleteId(null)}
+                                    onClick={() => setDeleteTarget(null)}
                                     className="px-4 py-2 bg-gray-200 rounded-md"
                                 >
                                     Batal
                                 </button>
 
                                 <button
-                                    onClick={handleDelete}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md"
+                                    onClick={() => void handleDelete()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md disabled:opacity-50"
                                 >
-                                    Hapus
+                                    {submitting ? "Menghapus..." : "Hapus"}
                                 </button>
                             </div>
                         </motion.div>
@@ -358,7 +599,6 @@ export default function Page() {
     );
 }
 
-/* MODAL */
 function Modal({
     children,
     onClose,

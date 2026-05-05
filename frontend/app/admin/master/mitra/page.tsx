@@ -5,6 +5,8 @@ import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -16,9 +18,10 @@ type Product = {
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/mitra"); // Get Data via useFetch
+    const { data, refetch } = useFetch<Product>("/mitra");
 
     const [form, setForm] = useState<FormType>({
         nama_yayasan: "",
@@ -30,6 +33,9 @@ export default function Page() {
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -44,19 +50,63 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
     const handleSubmit = async () => {
-        if (!form.nama_yayasan || !form.alamat || !form.nama_pic || !form.no_pic) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama_yayasan.trim()) nextFieldErrors.nama_yayasan = "Nama yayasan wajib diisi.";
+        if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
+        if (!form.nama_pic.trim()) nextFieldErrors.nama_pic = "Nama PIC wajib diisi.";
+        if (!form.no_pic.trim()) {
+            nextFieldErrors.no_pic = "No PIC wajib diisi.";
+        } else if (form.no_pic.trim().length < 10) {
+            nextFieldErrors.no_pic = "No PIC minimal 10 karakter.";
+        }
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/mitra/${editId}`, form);
+                setSuccessMessage("Mitra berhasil diperbarui.");
             } else {
                 await api.post("/mitra", form);
+                setSuccessMessage("Mitra berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -74,13 +124,17 @@ export default function Page() {
             await api.delete(`/mitra/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Mitra berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const resetForm = () => {
         setForm({ nama_yayasan: "", alamat: "", nama_pic: "", no_pic: "" });
+        setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
     };
@@ -142,6 +196,18 @@ export default function Page() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Data Mitra</h1>
             </div>
+
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
 
             <div className="flex items-center justify-between">
                 <input
@@ -266,33 +332,65 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
                             <input
                                 placeholder="Nama Yayasan"
                                 value={form.nama_yayasan}
-                                onChange={(e) => setForm({ ...form, nama_yayasan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_yayasan: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_yayasan: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_yayasan ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama_yayasan ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_yayasan}</p> : null}
 
                             <input
                                 placeholder="Alamat"
                                 value={form.alamat}
-                                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, alamat: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, alamat: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.alamat ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.alamat ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.alamat}</p> : null}
 
                             <input
                                 placeholder="Nama PIC"
                                 value={form.nama_pic}
-                                onChange={(e) => setForm({ ...form, nama_pic: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_pic: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_pic: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_pic ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama_pic ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_pic}</p> : null}
 
                             <input
                                 placeholder="Nomor PIC"
                                 value={form.no_pic}
-                                onChange={(e) => setForm({ ...form, no_pic: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, no_pic: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, no_pic: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.no_pic ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.no_pic ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.no_pic}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Minimal 10 karakter. Boleh angka, spasi, tanda kurung, `+`, dan `-`.
+                                </p>
+                            )}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

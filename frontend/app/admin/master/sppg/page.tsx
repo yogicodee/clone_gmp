@@ -5,6 +5,8 @@ import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -17,9 +19,10 @@ type Product = {
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/sppg"); // Get Data via useFetch
+    const { data, refetch } = useFetch<Product>("/sppg");
     const { data: mitraData } = useFetch<any>("/mitra");
 
     const [form, setForm] = useState<FormType>({
@@ -33,6 +36,9 @@ export default function Page() {
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -47,19 +53,67 @@ export default function Page() {
 
     /* ================= HANDLE ================= */
     const handleSubmit = async () => {
-        if (!form.nama_sppg || !form.alamat || !form.nama_yayasan || !form.nama_penanggungjawab || !form.no_penanggungjawab) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama_sppg.trim()) nextFieldErrors.nama_sppg = "Nama SPPG wajib diisi.";
+        if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
+        if (!form.nama_yayasan.trim()) nextFieldErrors.nama_yayasan = "Nama yayasan wajib dipilih.";
+        if (!form.nama_penanggungjawab.trim()) {
+            nextFieldErrors.nama_penanggungjawab = "Nama penanggung jawab wajib diisi.";
+        }
+        if (!form.no_penanggungjawab.trim()) {
+            nextFieldErrors.no_penanggungjawab = "No HP wajib diisi.";
+        } else if (form.no_penanggungjawab.trim().length < 10) {
+            nextFieldErrors.no_penanggungjawab = "No HP minimal 10 karakter.";
+        }
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setErrorMessage("");
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/sppg/${editId}`, form);
+                setSuccessMessage("SPPG berhasil diperbarui.");
             } else {
                 await api.post("/sppg", form);
+                setSuccessMessage("SPPG berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -77,8 +131,11 @@ export default function Page() {
             await api.delete(`/sppg/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("SPPG berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -90,6 +147,7 @@ export default function Page() {
             nama_penanggungjawab: "",
             no_penanggungjawab: "",
         });
+        setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
     };
@@ -151,6 +209,12 @@ export default function Page() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Data SPPG</h1>
             </div>
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
 
             <div className="flex items-center justify-between">
                 <input
@@ -285,21 +349,36 @@ export default function Page() {
                             <input
                                 placeholder="Nama SPPG"
                                 value={form.nama_sppg}
-                                onChange={(e) => setForm({ ...form, nama_sppg: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_sppg: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_sppg: undefined }));
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_sppg ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama_sppg ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_sppg}</p>
+                            ) : null}
 
                             <input
                                 placeholder="Alamat"
                                 value={form.alamat}
-                                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, alamat: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, alamat: undefined }));
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.alamat ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.alamat ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.alamat}</p>
+                            ) : null}
 
                             <select
                                 value={form.nama_yayasan}
-                                onChange={(e) => setForm({ ...form, nama_yayasan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_yayasan: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_yayasan: undefined }));
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_yayasan ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Nama Yayasan</option>
                                 {mitraData.map((item: any) => (
@@ -308,21 +387,41 @@ export default function Page() {
                                     </option>
                                 ))}
                             </select>
+                            {fieldErrors.nama_yayasan ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_yayasan}</p>
+                            ) : null}
 
 
                             <input
                                 placeholder="Nama Penanggungjawab"
                                 value={form.nama_penanggungjawab}
-                                onChange={(e) => setForm({ ...form, nama_penanggungjawab: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_penanggungjawab: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama_penanggungjawab: undefined }));
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_penanggungjawab ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama_penanggungjawab ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_penanggungjawab}</p>
+                            ) : null}
 
                             <input
                                 placeholder="Nomor HP"
                                 value={form.no_penanggungjawab}
-                                onChange={(e) => setForm({ ...form, no_penanggungjawab: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, no_penanggungjawab: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, no_penanggungjawab: undefined }));
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.no_penanggungjawab ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+
+                            {fieldErrors.no_penanggungjawab ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.no_penanggungjawab}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Minimal 10 karakter. Boleh angka, spasi, tanda kurung, `+`, dan `-`.
+                                </p>
+                            )}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

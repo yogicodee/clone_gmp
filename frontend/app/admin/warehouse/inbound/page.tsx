@@ -1,29 +1,47 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
-/* ================= TYPE ================= */
+type GudangOption = {
+    id: number;
+    nama_gudang: string;
+};
+
+type SupplierOption = {
+    id: number;
+    nama: string;
+};
+
+type ProdukOption = {
+    id: number;
+    nama: string;
+    satuan: string;
+};
+
 type Product = {
     id: number;
+    gudang_id: number;
     nama_barang: string;
-    kategori: string;
+    kategori: "basah" | "kering";
     tanggal_masuk: string;
-    qty: number;
+    qty: number | string;
     satuan: string;
-    harga_satuan: number;
-    total_harga: number;
+    harga_satuan: number | string;
+    total_harga: number | string;
     nama_supplier: string;
+    gudang?: GudangOption | null;
 };
 
 type FormType = {
-    gudang_id: number;
+    gudang_id: number | null;
     nama_barang: string;
-    nama_gudang: string;
-    kategori: string;
+    kategori: "" | "basah" | "kering";
     tanggal_masuk: string;
     qty: number;
     satuan: string;
@@ -31,16 +49,17 @@ type FormType = {
     nama_supplier: string;
 };
 
+type FieldErrors = Partial<Record<keyof FormType, string>>;
+
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/inbound");
-    const { data: satuanData } = useFetch<any>("/kategori");
-    const { data: supplierData } = useFetch<any>("/supplier");
-    const { data: gudangData } = useFetch<any>("/gudang");
+    const { data, refetch } = useFetch<Product>("/inbound");
+    const { data: supplierData } = useFetch<SupplierOption>("/supplier");
+    const { data: gudangData } = useFetch<GudangOption>("/gudang");
+    const { data: produkData } = useFetch<ProdukOption>("/produk");
 
     const [form, setForm] = useState<FormType>({
-        gudang_id: 1,
+        gudang_id: null,
         nama_barang: "",
-        nama_gudang: "",
         kategori: "",
         tanggal_masuk: "",
         qty: 0,
@@ -51,15 +70,16 @@ export default function Page() {
 
     const [hargaInput, setHargaInput] = useState("");
     const [qtyInput, setQtyInput] = useState("");
-
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     const [search, setSearch] = useState("");
-    const [sortField, setSortField] = useState<keyof Product>("nama_barang");
-    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-
+    const [sortField] = useState<keyof Product>("nama_barang");
+    const [sortOrder] = useState<"asc" | "desc">("asc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
@@ -68,64 +88,29 @@ export default function Page() {
         return number.toLocaleString("id-ID");
     };
 
-    /* ================= HANDLE ================= */
-    const handleSubmit = async () => {
-        if (
-            !form.nama_barang ||
-            !form.kategori ||
-            !form.tanggal_masuk ||
-            form.qty <= 0 ||
-            !form.satuan ||
-            !form.nama_gudang ||
-            form.harga_satuan <= 0 ||
-            !form.nama_supplier
-        ) {
-            alert("Semua field wajib diisi dengan benar");
-            return;
+    const formatTanggal = (value: string) => {
+        if (!value) return "-";
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
         }
 
-        const payload = {
-            ...form,
-            kategori: form.kategori.toLowerCase(), // ✅ fix
-            total_harga: form.qty * form.harga_satuan,
-        };
-
-        try {
-            if (editId) {
-                await api.put(`/inbound/${editId}`, payload);
-            } else {
-                await api.post("/inbound", payload);
-            }
-
-            await refetch();
-            resetForm();
-        } catch (error: any) {
-            console.log("ERROR 422 =>", error.response?.data);
-        }
+        return date.toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        });
     };
 
-    const handleEdit = (item: Product) => {
-        const { id, total_harga, ...rest } = item;
-        setForm({ ...rest, gudang_id: 1 });
-        setEditId(id);
-        setOpenForm(true);
+    const clearFieldError = (field: keyof FormType) => {
+        setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+        setErrorMessage("");
     };
 
-    const handleDelete = async () => {
-        if (!deleteId) return;
-
-        try {
-            await api.delete(`/inbound/${deleteId}`);
-            await refetch();
-            setDeleteId(null);
-        } catch (error: any) {
-            console.log("ERROR 422 =>", error.response?.data);
-        }
-    };
-
-    const resetForm = () => {
+    const openCreateForm = () => {
         setForm({
-            gudang_id: 1,
+            gudang_id: null,
             nama_barang: "",
             kategori: "",
             tanggal_masuk: "",
@@ -136,11 +121,127 @@ export default function Page() {
         });
         setHargaInput("");
         setQtyInput("");
+        setFieldErrors({});
+        setErrorMessage("");
+        setSuccessMessage("");
+        setEditId(null);
+        setOpenForm(true);
+    };
+
+    const handleSubmit = async () => {
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.gudang_id) nextFieldErrors.gudang_id = "Gudang wajib dipilih.";
+        if (!form.nama_barang.trim()) nextFieldErrors.nama_barang = "Nama barang wajib dipilih.";
+        if (!form.kategori) nextFieldErrors.kategori = "Kategori wajib dipilih.";
+        if (!form.tanggal_masuk) nextFieldErrors.tanggal_masuk = "Tanggal masuk wajib diisi.";
+        if (form.qty <= 0) nextFieldErrors.qty = "Qty harus lebih dari 0.";
+        if (!form.satuan.trim()) nextFieldErrors.satuan = "Satuan wajib dipilih.";
+        if (form.harga_satuan < 0) nextFieldErrors.harga_satuan = "Harga satuan tidak boleh negatif.";
+        if (!form.nama_supplier.trim()) nextFieldErrors.nama_supplier = "Supplier wajib dipilih.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
+
+        try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
+            if (editId) {
+                await api.put(`/inbound/${editId}`, form);
+                setSuccessMessage("Data inbound berhasil diperbarui.");
+            } else {
+                await api.post("/inbound", form);
+                setSuccessMessage("Data inbound berhasil ditambahkan.");
+            }
+
+            await refetch();
+            resetForm();
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        }
+    };
+
+    const handleEdit = (item: Product) => {
+        setForm({
+            gudang_id: item.gudang_id,
+            nama_barang: item.nama_barang,
+            kategori: item.kategori,
+            tanggal_masuk: item.tanggal_masuk,
+            qty: Number(item.qty),
+            satuan: item.satuan,
+            harga_satuan: Number(item.harga_satuan),
+            nama_supplier: item.nama_supplier,
+        });
+        setQtyInput(String(Number(item.qty)));
+        setHargaInput(formatRupiah(item.harga_satuan));
+        setFieldErrors({});
+        setErrorMessage("");
+        setEditId(item.id);
+        setOpenForm(true);
+    };
+
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        try {
+            await api.delete(`/inbound/${deleteId}`);
+            await refetch();
+            setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Data inbound berhasil dihapus.");
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        }
+    };
+
+    const resetForm = () => {
+        setForm({
+            gudang_id: null,
+            nama_barang: "",
+            kategori: "",
+            tanggal_masuk: "",
+            qty: 0,
+            satuan: "",
+            harga_satuan: 0,
+            nama_supplier: "",
+        });
+        setHargaInput("");
+        setQtyInput("");
+        setFieldErrors({});
+        setErrorMessage("");
         setEditId(null);
         setOpenForm(false);
     };
 
-    /* ================= FILTER ================= */
     const filteredData = useMemo(() => {
         let result = [...data];
 
@@ -148,7 +249,8 @@ export default function Page() {
             result = result.filter(
                 (item) =>
                     item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
-                    item.nama_supplier.toLowerCase().includes(search.toLowerCase())
+                    item.nama_supplier.toLowerCase().includes(search.toLowerCase()) ||
+                    item.gudang?.nama_gudang?.toLowerCase().includes(search.toLowerCase())
             );
         }
 
@@ -165,18 +267,12 @@ export default function Page() {
     }, [data, search, sortField, sortOrder]);
 
     const totalPages = Math.ceil(filteredData.length / perPage);
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
 
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    useEffect(() => setCurrentPage(1), [search]);
-
-    useEffect(() => {
-        if (currentPage > totalPages) setCurrentPage(1);
-    }, [filteredData]);
-
 
     return (
         <div className="p-6 space-y-6">
@@ -184,16 +280,31 @@ export default function Page() {
                 <h1 className="text-3xl font-bold">Data Barang Masuk</h1>
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
                 <input
-                    placeholder="Cari barang / supplier..."
+                    placeholder="Cari barang / supplier / gudang..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button
-                    onClick={() => setOpenForm(true)}
+                    onClick={openCreateForm}
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition"
                 >
                     <Plus size={16} />
@@ -201,13 +312,13 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
                             <th className="p-3 text-left">Nama Barang</th>
+                            <th className="p-3 text-left">Gudang</th>
                             <th className="p-3 text-left">Kategori</th>
                             <th className="p-3 text-left">Tanggal</th>
                             <th className="p-3 text-left">Qty</th>
@@ -223,12 +334,13 @@ export default function Page() {
                         {paginatedData.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
+                                    {(normalizedCurrentPage - 1) * perPage + index + 1}
                                 </td>
                                 <td className="p-3">{item.nama_barang}</td>
-                                <td className="p-3">{item.kategori}</td>
-                                <td className="p-3">{item.tanggal_masuk}</td>
-                                <td className="p-3">{item.qty}</td>
+                                <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
+                                <td className="p-3 capitalize">{item.kategori}</td>
+                                <td className="p-3">{formatTanggal(item.tanggal_masuk)}</td>
+                                <td className="p-3">{Number(item.qty)}</td>
                                 <td className="p-3">{item.satuan}</td>
                                 <td className="p-3">Rp {formatRupiah(item.harga_satuan)}</td>
                                 <td className="p-3">Rp {formatRupiah(item.total_harga)}</td>
@@ -248,10 +360,9 @@ export default function Page() {
                 </table>
             </div>
 
-            {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >
@@ -262,15 +373,14 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border border-white rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
-                            }`}
+                        className={`px-3 py-1 border border-white rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages || totalPages === 0}
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >
@@ -278,7 +388,6 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* FORM */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
@@ -287,104 +396,145 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
-                            {/* NAMA BARANG */}
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
+                            <select
+                                value={form.gudang_id ?? ""}
+                                onChange={(e) => {
+                                    setForm({ ...form, gudang_id: e.target.value ? Number(e.target.value) : null });
+                                    clearFieldError("gudang_id");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.gudang_id ? "border-red-500 focus:outline-red-500" : ""}`}
+                            >
+                                <option value="">Pilih Gudang</option>
+                                {gudangData.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.nama_gudang}
+                                    </option>
+                                ))}
+                            </select>
+                            {fieldErrors.gudang_id ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.gudang_id}</p> : null}
+
                             <select
                                 value={form.nama_barang}
-                                onChange={(e) => setForm({ ...form, nama_barang: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    const selectedNama = e.target.value;
+                                    const selectedProduk = produkData.find((item) => item.nama === selectedNama);
+
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        nama_barang: selectedNama,
+                                        satuan: selectedProduk?.satuan ?? prev.satuan,
+                                    }));
+                                    clearFieldError("nama_barang");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_barang ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Barang</option>
-                                <option value="Beras">Beras</option>
-                                <option value="Minyak">Minyak</option>
-                                <option value="Gula">Gula</option>
+                                {produkData.map((item) => (
+                                    <option key={item.id} value={item.nama}>
+                                        {item.nama}
+                                    </option>
+                                ))}
                             </select>
+                            {fieldErrors.nama_barang ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_barang}</p> : null}
 
-                            {/* KATEGORI */}
                             <select
                                 value={form.kategori}
-                                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, kategori: e.target.value as FormType["kategori"] });
+                                    clearFieldError("kategori");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.kategori ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Kategori</option>
                                 <option value="basah">Basah</option>
                                 <option value="kering">Kering</option>
                             </select>
+                            {fieldErrors.kategori ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.kategori}</p> : null}
 
-                            {/* TANGGAL */}
                             <input
                                 type="date"
                                 value={form.tanggal_masuk}
-                                onChange={(e) => setForm({ ...form, tanggal_masuk: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, tanggal_masuk: e.target.value });
+                                    clearFieldError("tanggal_masuk");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.tanggal_masuk ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.tanggal_masuk ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.tanggal_masuk}</p> : null}
 
-                            {/* QTY */}
                             <input
                                 placeholder="Qty"
                                 value={qtyInput}
                                 onChange={(e) => {
-                                    const val = e.target.value.replace(/\D/g, "");
+                                    const val = e.target.value.replace(/[^\d.]/g, "");
                                     setQtyInput(val);
-                                    setForm({ ...form, qty: Number(val) });
+                                    setForm({ ...form, qty: Number(val || 0) });
+                                    clearFieldError("qty");
                                 }}
-                                className="w-full border p-2 rounded-md"
+                                className={`w-full border p-2 rounded-md ${fieldErrors.qty ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.qty ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.qty}</p> : null}
 
-                            {/* SATUAN */}
-                            <select
+                            <input
                                 value={form.satuan}
-                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            >
-                                <option value="">Pilih Satuan</option>
-                                {satuanData.map((item: any) => (
-                                    <option key={item.id} value={item.nama_satuan}>
-                                        {item.nama_satuan}
-                                    </option>
-                                ))}
-                            </select>
+                                readOnly
+                                placeholder="Satuan"
+                                className={`w-full border p-2 rounded-md bg-slate-50 text-slate-700 ${fieldErrors.satuan ? "border-red-500 focus:outline-red-500" : ""}`}
+                            />
+                            {fieldErrors.satuan ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.satuan}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Satuan otomatis mengikuti barang yang dipilih.
+                                </p>
+                            )}
 
-                            {/* HARGA */}
                             <input
                                 placeholder="Harga Satuan"
                                 value={hargaInput}
                                 onChange={(e) => {
                                     const raw = e.target.value.replace(/\D/g, "");
                                     setHargaInput(formatRupiah(raw));
-                                    setForm({ ...form, harga_satuan: Number(raw) });
+                                    setForm({ ...form, harga_satuan: Number(raw || 0) });
+                                    clearFieldError("harga_satuan");
                                 }}
-                                className="w-full border p-2 rounded-md"
+                                className={`w-full border p-2 rounded-md ${fieldErrors.harga_satuan ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.harga_satuan ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.harga_satuan}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Isi 0 jika barang tidak memiliki harga beli.
+                                </p>
+                            )}
 
-                            {/* Gudang */}
-                            <select
-                                value={form.nama_gudang}
-                                onChange={(e) => setForm({ ...form, nama_gudang: e.target.value })}
-                                className="w-full border p-2 rounded-md"
-                            >
-                                <option value="">Pilih Supplier</option>
-                                {supplierData.map((item: any) => (
-                                    <option key={item.id} value={item.nama_gudang}>
-                                        {item.nama_gudang}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {/* SUPPLIER */}
                             <select
                                 value={form.nama_supplier}
-                                onChange={(e) => setForm({ ...form, nama_supplier: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama_supplier: e.target.value });
+                                    clearFieldError("nama_supplier");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama_supplier ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Supplier</option>
-                                {supplierData.map((item: any) => (
+                                {supplierData.map((item) => (
                                     <option key={item.id} value={item.nama}>
                                         {item.nama}
                                     </option>
                                 ))}
                             </select>
+                            {fieldErrors.nama_supplier ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_supplier}</p> : null}
 
-                            {/* BUTTON */}
+                            <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                Total harga otomatis: <span className="font-semibold">Rp {formatRupiah(form.qty * form.harga_satuan)}</span>
+                            </div>
+
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">
                                     Batal
@@ -398,7 +548,6 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* DELETE MODAL */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
@@ -420,8 +569,13 @@ export default function Page() {
     );
 }
 
-/* ================= MODAL ================= */
-function Modal({ children, onClose }: any) {
+function Modal({
+    children,
+    onClose,
+}: {
+    children: React.ReactNode;
+    onClose: () => void;
+}) {
     return (
         <motion.div
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"

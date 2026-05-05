@@ -52,15 +52,17 @@ class DaftarPembelanjaanController extends Controller
         $payload = $this->validatePayload($request);
 
         $record = DB::transaction(function () use ($payload): DaftarPembelanjaan {
-            $record = DaftarPembelanjaan::query()->create($payload);
+            $record = DaftarPembelanjaan::query()->firstOrCreate([
+                'tanggal_pesan' => $payload['tanggal_pesan'],
+            ]);
 
-            $this->copyOrderPenawaranItemsByDate($record);
+            $this->syncOrderPenawaranItemsByDate($record);
 
             return $record;
         });
 
         return response()->json([
-            'message' => 'Daftar pembelanjaan berhasil ditambahkan.',
+            'message' => 'Daftar pembelanjaan berhasil disimpan.',
             'data' => $record->load('items'),
         ], 201);
     }
@@ -106,8 +108,10 @@ class DaftarPembelanjaanController extends Controller
         ]);
     }
 
-    private function copyOrderPenawaranItemsByDate(DaftarPembelanjaan $record): void
+    private function syncOrderPenawaranItemsByDate(DaftarPembelanjaan $record): void
     {
+        $record->items()->delete();
+
         $orders = OrderPenawaran::query()
             ->whereDate('tanggal_pesan', $record->tanggal_pesan)
             ->with('items')

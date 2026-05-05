@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
-import api from "@/lib/api"; 
+import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -14,10 +16,10 @@ type Product = {
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-
-    const { data, loading, refetch } = useFetch<Product>("/wilayah");
+    const { data, refetch } = useFetch<Product>("/wilayah");
 
     const [form, setForm] = useState<FormType>({
         nama: "",
@@ -27,6 +29,9 @@ export default function Page() {
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -40,27 +45,66 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
-
     const handleSubmit = async () => {
-        if (!form.nama || !form.alamat) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama.trim()) nextFieldErrors.nama = "Nama wajib diisi.";
+        if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/wilayah/${editId}`, form);
+                setSuccessMessage("Wilayah berhasil diperbarui.");
             } else {
                 await api.post("/wilayah", form);
+                setSuccessMessage("Wilayah berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const handleEdit = (item: Product) => {
         const { id, ...rest } = item;
         setForm(rest);
+        setFieldErrors({});
+        setErrorMessage("");
         setEditId(id);
         setOpenForm(true);
     };
@@ -72,13 +116,18 @@ export default function Page() {
             await api.delete(`/wilayah/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Wilayah berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const resetForm = () => {
         setForm({ nama: "", alamat: "" });
+        setFieldErrors({});
+        setErrorMessage("");
         setEditId(null);
         setOpenForm(false);
     };
@@ -93,7 +142,6 @@ export default function Page() {
     };
 
     /* ================= FILTER + SORT ================= */
-
     const filteredData = useMemo(() => {
         let result = [...data];
 
@@ -117,49 +165,50 @@ export default function Page() {
     }, [data, search, sortField, sortOrder]);
 
     /* ================= PAGINATION ================= */
-
     const totalPages = Math.ceil(filteredData.length / perPage);
 
+    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
+
     const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    // Pagination
-    // ✅ FIX: reset page saat filter berubah
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
-
-    // ✅ FIX: jaga supaya page tidak out of range
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [filteredData]);
-
-
 
     return (
         <div className="p-6 space-y-6">
-            {/* HEADER */}
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Wilayah Dan Lokasi</h1>
-
-
             </div>
 
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
-                {/* FILTER */}
                 <input
                     placeholder="Cari nama atau alamat..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
                 <button
-                    onClick={() => setOpenForm(true)}
+                    onClick={() => {
+                        setSuccessMessage("");
+                        setErrorMessage("");
+                        setOpenForm(true);
+                    }}
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
@@ -167,13 +216,11 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* TABLE */}
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-
                             <th className="p-3">
                                 <button
                                     onClick={() => handleSort("nama")}
@@ -182,7 +229,6 @@ export default function Page() {
                                     Nama <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3">
                                 <button
                                     onClick={() => handleSort("alamat")}
@@ -191,7 +237,6 @@ export default function Page() {
                                     Alamat <ArrowUpDown size={14} />
                                 </button>
                             </th>
-
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -200,11 +245,10 @@ export default function Page() {
                         {paginatedData.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
+                                    {(normalizedCurrentPage - 1) * perPage + index + 1}
                                 </td>
                                 <td className="p-3">{item.nama}</td>
                                 <td className="p-3">{item.alamat}</td>
-
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
                                         onClick={() => handleEdit(item)}
@@ -226,10 +270,9 @@ export default function Page() {
                 </table>
             </div>
 
-            {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -240,17 +283,14 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1
-                            ? "bg-primary text-white"
-                            : ""
-                            }`}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -258,7 +298,6 @@ export default function Page() {
                 </button>
             </div>
 
-            {/* MODAL FORM */}
             <AnimatePresence>
                 {openForm && (
                     <Modal onClose={resetForm}>
@@ -267,26 +306,35 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
                             <input
                                 placeholder="Nama"
                                 value={form.nama}
-                                onChange={(e) =>
-                                    setForm({ ...form, nama: e.target.value })
-                                }
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama}</p> : null}
 
                             <input
                                 placeholder="Alamat"
                                 value={form.alamat}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        alamat: e.target.value,
-                                    })
-                                }
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, alamat: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, alamat: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.alamat ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.alamat ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.alamat}</p> : null}
 
                             <div className="flex justify-end gap-2">
                                 <button
@@ -308,7 +356,6 @@ export default function Page() {
                 )}
             </AnimatePresence>
 
-            {/* MODAL DELETE */}
             <AnimatePresence>
                 {deleteId && (
                     <Modal onClose={() => setDeleteId(null)}>
@@ -340,7 +387,6 @@ export default function Page() {
     );
 }
 
-/* ================= MODAL ================= */
 function Modal({
     children,
     onClose,

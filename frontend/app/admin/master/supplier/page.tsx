@@ -5,6 +5,8 @@ import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
 /* ================= TYPE ================= */
 type Product = {
@@ -16,9 +18,10 @@ type Product = {
 };
 
 type FormType = Omit<Product, "id">;
+type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 export default function Page() {
-    const { data, loading, refetch } = useFetch<Product>("/supplier"); // Get Data via useFetch
+    const { data, refetch } = useFetch<Product>("/supplier");
 
     const [listKategori] = useState([
         "ikan",
@@ -35,6 +38,9 @@ export default function Page() {
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
     const [search, setSearch] = useState("");
@@ -50,19 +56,63 @@ export default function Page() {
     /* ================= HANDLE ================= */
 
     const handleSubmit = async () => {
-        if (!form.nama || !form.alamat) return;
+        const nextFieldErrors: FieldErrors = {};
+
+        if (!form.nama.trim()) nextFieldErrors.nama = "Nama wajib diisi.";
+        if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
+        if (!form.no_telp.trim()) {
+            nextFieldErrors.no_telp = "No telepon wajib diisi.";
+        } else if (form.no_telp.trim().length < 10) {
+            nextFieldErrors.no_telp = "No telepon minimal 10 karakter.";
+        }
+        if (!form.kategori.trim()) nextFieldErrors.kategori = "Kategori wajib dipilih.";
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
         try {
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
+
             if (editId) {
                 await api.put(`/supplier/${editId}`, form);
+                setSuccessMessage("Supplier berhasil diperbarui.");
             } else {
                 await api.post("/supplier", form);
+                setSuccessMessage("Supplier berhasil ditambahkan.");
             }
 
             await refetch();
             resetForm();
         } catch (error) {
-            console.error(error);
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string") {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
+
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
+
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
@@ -80,13 +130,17 @@ export default function Page() {
             await api.delete(`/supplier/${deleteId}`);
             await refetch();
             setDeleteId(null);
+            setErrorMessage("");
+            setSuccessMessage("Supplier berhasil dihapus.");
         } catch (error) {
-            console.error(error);
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
         }
     };
 
     const resetForm = () => {
         setForm({ nama: "", alamat: "", no_telp: "", kategori: "" });
+        setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
     };
@@ -149,6 +203,18 @@ export default function Page() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Data Supplier</h1>
             </div>
+
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
 
             <div className="flex items-center justify-between">
                 {/* FILTER */}
@@ -274,32 +340,67 @@ export default function Page() {
                                 {editId ? "Edit Data" : "Tambah Data"}
                             </h2>
 
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
+
                             <input
                                 placeholder="Nama"
                                 value={form.nama}
-                                onChange={(e) => setForm({ ...form, nama: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, nama: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, nama: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.nama ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.nama ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama}</p>
+                            ) : null}
 
                             <input
                                 placeholder="Alamat"
                                 value={form.alamat}
-                                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, alamat: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, alamat: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.alamat ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.alamat ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.alamat}</p>
+                            ) : null}
 
                             <input
                                 placeholder="No Telepon"
                                 value={form.no_telp}
-                                onChange={(e) => setForm({ ...form, no_telp: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, no_telp: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, no_telp: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.no_telp ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
+                            {fieldErrors.no_telp ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.no_telp}</p>
+                            ) : (
+                                <p className="text-xs text-gray-500 -mt-2">
+                                    Minimal 10 karakter. Boleh angka, spasi, tanda kurung, `+`, dan `-`.
+                                </p>
+                            )}
 
                             {/* Selesct Kategori */}
                             <select
                                 value={form.kategori}
-                                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-                                className="w-full border p-2 rounded-md"
+                                onChange={(e) => {
+                                    setForm({ ...form, kategori: e.target.value });
+                                    setFieldErrors((prev) => ({ ...prev, kategori: undefined }));
+                                    setErrorMessage("");
+                                }}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.kategori ? "border-red-500 focus:outline-red-500" : ""}`}
                             >
                                 <option value="">Pilih Kategori</option>
                                 {listKategori.map((item, i) => (
@@ -308,6 +409,9 @@ export default function Page() {
                                     </option>
                                 ))}
                             </select>
+                            {fieldErrors.kategori ? (
+                                <p className="text-xs text-red-600 -mt-2">{fieldErrors.kategori}</p>
+                            ) : null}
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

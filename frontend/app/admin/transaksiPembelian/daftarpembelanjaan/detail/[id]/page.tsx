@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -19,6 +19,34 @@ type EditForm = {
     supplier_id: number | "";
 };
 
+type WarehouseStockItem = {
+    nama_barang: string;
+    qty: number | string;
+    satuan_terkecil: string;
+};
+
+function normalizeUnit(value: string) {
+    const normalized = value.trim().toLowerCase();
+
+    if (["pcs", "pc", "piece", "pieces", "piecis", "picis"].includes(normalized)) {
+        return "pcs";
+    }
+
+    if (["kg", "kgs", "kilogram"].includes(normalized)) {
+        return "kg";
+    }
+
+    if (["ltr", "lt", "liter", "litre"].includes(normalized)) {
+        return "liter";
+    }
+
+    return normalized;
+}
+
+function createStockKey(namaBarang: string, satuan: string) {
+    return `${namaBarang.trim().toLowerCase()}|${normalizeUnit(satuan)}`;
+}
+
 export default function Page() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
@@ -27,6 +55,7 @@ export default function Page() {
     const [detail, setDetail] = useState<DaftarPembelanjaan | null>(null);
     const [items, setItems] = useState<DaftarPembelanjaanItem[]>([]);
     const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+    const [warehouseStockMap, setWarehouseStockMap] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -38,16 +67,22 @@ export default function Page() {
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    async function fetchData() {
+    const fetchData = useCallback(async () => {
         try {
             setLoading(true);
             setError("");
 
-            const [detailResponse, supplierResponse] = await Promise.all([
+            const [detailResponse, supplierResponse, stokKeringResponse, stokBasahResponse] = await Promise.all([
                 api.get<ApiDetailResponse<DaftarPembelanjaan>>(
                     `/daftar-pembelanjaan/${daftarPembelanjaanId}`
                 ),
                 api.get<ApiListResponse<SupplierOption>>("/supplier", {
+                    params: { per_page: 100 },
+                }),
+                api.get<ApiListResponse<WarehouseStockItem>>("/stok-kering", {
+                    params: { per_page: 100 },
+                }),
+                api.get<ApiListResponse<WarehouseStockItem>>("/stok-basah", {
                     params: { per_page: 100 },
                 }),
             ]);
@@ -56,22 +91,32 @@ export default function Page() {
             setDetail(detailData);
             setItems(detailData.items ?? []);
             setSupplierOptions(supplierResponse.data.data ?? []);
+
+            const stockMap: Record<string, number> = {};
+            const warehouseStocks = [
+                ...(stokKeringResponse.data.data ?? []),
+                ...(stokBasahResponse.data.data ?? []),
+            ];
+
+            warehouseStocks.forEach((item) => {
+                const key = createStockKey(item.nama_barang, item.satuan_terkecil);
+                stockMap[key] = (stockMap[key] ?? 0) + Number(item.qty || 0);
+            });
+
+            setWarehouseStockMap(stockMap);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }
-
-    useEffect(() => {
-        if (!Number.isNaN(daftarPembelanjaanId)) {
-            void fetchData();
-        }
     }, [daftarPembelanjaanId]);
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
+        if (!Number.isNaN(daftarPembelanjaanId)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            void fetchData();
+        }
+    }, [daftarPembelanjaanId, fetchData]);
 
     const groupedItems = useMemo(() => {
         const normalizedSearch = search.trim().toLowerCase();
@@ -93,7 +138,8 @@ export default function Page() {
                 map.set(key, {
                     ...item,
                     qty: Number(item.qty),
-                    stok: Number(item.stok),
+                    stok:
+                        warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0,
                     kebutuhan: Number(item.kebutuhan),
                 });
             } else {
@@ -102,27 +148,22 @@ export default function Page() {
                 map.set(key, {
                     ...existing,
                     qty: Number(existing.qty) + Number(item.qty),
-                    stok: Number(existing.stok) + Number(item.stok),
+                    stok: existing.stok,
                     kebutuhan: Number(existing.kebutuhan) + Number(item.kebutuhan),
                 });
             }
         }
 
         return Array.from(map.values());
-    }, [items, search]);
+    }, [items, search, warehouseStockMap]);
 
     const totalPages = Math.max(1, Math.ceil(groupedItems.length / perPage));
+    const normalizedCurrentPage = Math.min(currentPage, totalPages);
 
     const paginatedItems = groupedItems.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [currentPage, totalPages]);
 
     function openEditModal(item: DaftarPembelanjaanItem) {
         setEditTarget(item);
@@ -203,7 +244,10 @@ export default function Page() {
             <input
                 placeholder="Cari barang / supplier..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                }}
                 className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
             />
 
@@ -241,7 +285,7 @@ export default function Page() {
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {(currentPage - 1) * perPage + index + 1}
+                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3 text-center">{item.qty}</td>
@@ -268,7 +312,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={normalizedCurrentPage === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -279,14 +323,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={normalizedCurrentPage === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
