@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\SuratJalan\SuratJalanItem;
 
 use App\Http\Controllers\Controller;
+use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\PenjualanItem;
 use App\Models\TransaksiPenjualan\SuratJalan;
 use App\Models\TransaksiPenjualan\SuratJalanItem;
@@ -14,6 +15,8 @@ class SuratJalanItemController extends Controller
 {
     public function index(Request $request, SuratJalan $suratJalan): JsonResponse
     {
+        $this->syncItemsFromPenjualan($suratJalan);
+
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
         ]);
@@ -50,6 +53,7 @@ class SuratJalanItemController extends Controller
 
     public function show(SuratJalan $suratJalan, SuratJalanItem $item): JsonResponse
     {
+        $this->syncItemsFromPenjualan($suratJalan);
         $this->ensureItemBelongsToSuratJalan($suratJalan, $item);
 
         return response()->json([
@@ -153,5 +157,59 @@ class SuratJalanItemController extends Controller
                 'penjualan_item_id' => 'Item surat jalan harus berasal dari transaksi penjualan yang sama.',
             ]);
         }
+    }
+
+    private function syncItemsFromPenjualan(SuratJalan $suratJalan): void
+    {
+        if ($suratJalan->tanggal === null) {
+            $suratJalan->items()->delete();
+
+            return;
+        }
+
+        $sourceItems = Penjualan::query()
+            ->with('items')
+            ->whereDate('tanggal', $suratJalan->tanggal)
+            ->orderBy('id')
+            ->get()
+            ->flatMap(fn (Penjualan $penjualan) => $penjualan->items)
+            ->values();
+
+        $existingItems = $suratJalan->items()
+            ->whereNotNull('penjualan_item_id')
+            ->get()
+            ->keyBy('penjualan_item_id');
+
+        $sourceIds = $sourceItems
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        foreach ($sourceItems as $sourceItem) {
+            $currentItem = $existingItems->get($sourceItem->id);
+
+            $suratJalan->items()->updateOrCreate(
+                [
+                    'surat_jalan_id' => $suratJalan->id,
+                    'penjualan_item_id' => $sourceItem->id,
+                ],
+                [
+                    'nama_barang' => $sourceItem->nama_barang,
+                    'qty' => $sourceItem->qty,
+                    'satuan' => $sourceItem->satuan,
+                    'keterangan' => $currentItem?->keterangan,
+                ]
+            );
+        }
+
+        $suratJalan->items()
+            ->where(function ($query) use ($sourceIds): void {
+                $query->whereNull('penjualan_item_id');
+
+                if (! empty($sourceIds)) {
+                    $query->orWhereNotIn('penjualan_item_id', $sourceIds);
+                }
+            })
+            ->delete();
     }
 }

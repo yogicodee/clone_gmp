@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { FileDown, Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { extractErrorMessage } from "@/lib/transaksiPembelian";
-import axios from "axios";
 
 type SuratJalanItem = {
     id: number;
@@ -17,13 +18,6 @@ type SuratJalanItem = {
     keterangan: string | null;
 };
 
-type PenjualanItemOption = {
-    id: number;
-    nama_barang: string;
-    qty: number | string;
-    satuan: string;
-};
-
 type SuratJalanDetail = {
     id: number;
     nomor_surat_jalan: string;
@@ -31,27 +25,24 @@ type SuratJalanDetail = {
     tanggal: string;
     status: "draft" | "selesai" | "batal";
     sppg?: { nama_sppg: string } | null;
-    armadaRef?: { nama_unit: string; no_pol: string } | null;
+    armada_ref?: { nama_unit: string; no_pol: string } | null;
     driver?: { nama: string } | null;
 };
 
 type FormType = {
-    penjualan_item_id: number | null;
-    nama_barang: string;
-    qty: string;
-    satuan: string;
     keterangan: string;
 };
 
-type FieldErrors = Partial<Record<keyof FormType, string>>;
-
 const initialForm: FormType = {
-    penjualan_item_id: null,
-    nama_barang: "",
-    qty: "",
-    satuan: "",
     keterangan: "",
 };
+
+const EXPORT_COMPANY_NAME = "Koperasi Mitra Pangan Berdikari";
+const EXPORT_COMPANY_LINES = [
+    "Jl. Hos Cokroaminoto No. 56 Jombatan, Kecamatan Jombang,",
+    "Kabupaten Jombang",
+    "No. Tlp 081803010020",
+];
 
 const formatTanggal = (value: string) => {
     if (!value) return "-";
@@ -71,17 +62,14 @@ export default function Page() {
 
     const [detail, setDetail] = useState<SuratJalanDetail | null>(null);
     const [items, setItems] = useState<SuratJalanItem[]>([]);
-    const [barangOptions, setBarangOptions] = useState<PenjualanItemOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
-    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
     const [search, setSearch] = useState("");
     const [editTarget, setEditTarget] = useState<SuratJalanItem | null>(null);
     const [form, setForm] = useState<FormType>(initialForm);
-    const [deleteTarget, setDeleteTarget] = useState<SuratJalanItem | null>(null);
     const [openForm, setOpenForm] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
@@ -91,15 +79,13 @@ export default function Page() {
             setLoading(true);
             setErrorMessage("");
 
-            const [detailResponse, itemsResponse, opsiResponse] = await Promise.all([
+            const [detailResponse, itemsResponse] = await Promise.all([
                 api.get(`/surat-jalan/${suratJalanId}`),
                 api.get(`/surat-jalan/${suratJalanId}/items`),
-                api.get(`/surat-jalan/${suratJalanId}/opsi-barang`),
             ]);
 
             setDetail(detailResponse.data.data);
             setItems(itemsResponse.data.data ?? []);
-            setBarangOptions(opsiResponse.data.data ?? []);
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
         } finally {
@@ -116,137 +102,45 @@ export default function Page() {
 
     const resetForm = () => {
         setForm(initialForm);
-        setFieldErrors({});
         setErrorMessage("");
         setEditTarget(null);
         setOpenForm(false);
     };
 
-    const clearFieldError = (field: keyof FormType) => {
-        setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
-        setErrorMessage("");
-    };
-
-    const openCreateForm = () => {
-        setForm(initialForm);
-        setFieldErrors({});
-        setErrorMessage("");
-        setSuccessMessage("");
-        setEditTarget(null);
-        setOpenForm(true);
-    };
-
     const handleEdit = (item: SuratJalanItem) => {
         setEditTarget(item);
         setForm({
-            penjualan_item_id: item.penjualan_item_id,
-            nama_barang: item.nama_barang,
-            qty: String(Number(item.qty)),
-            satuan: item.satuan ?? "",
             keterangan: item.keterangan ?? "",
         });
-        setFieldErrors({});
         setErrorMessage("");
         setOpenForm(true);
     };
 
     const handleSubmit = async () => {
-        const nextFieldErrors: FieldErrors = {};
-
-        if (!form.penjualan_item_id && !form.nama_barang.trim()) {
-            nextFieldErrors.nama_barang = "Nama barang wajib diisi.";
-        }
-        if (!form.penjualan_item_id) {
-            if (!form.qty.trim()) {
-                nextFieldErrors.qty = "Qty wajib diisi.";
-            } else if (Number(form.qty) <= 0) {
-                nextFieldErrors.qty = "Qty harus lebih dari 0.";
-            }
-        }
-
-        if (Object.keys(nextFieldErrors).length > 0) {
-            setFieldErrors(nextFieldErrors);
-            setSuccessMessage("");
+        if (!editTarget) {
             return;
         }
 
         try {
             setSubmitting(true);
-            setFieldErrors({});
             setErrorMessage("");
             setSuccessMessage("");
 
-            const payload = form.penjualan_item_id
-                ? {
-                    penjualan_item_id: form.penjualan_item_id,
-                    keterangan: form.keterangan || null,
-                }
-                : {
-                    nama_barang: form.nama_barang,
-                    qty: Number(form.qty),
-                    satuan: form.satuan || null,
-                    keterangan: form.keterangan || null,
-                };
-
-            if (editTarget) {
-                await api.put(`/surat-jalan/${suratJalanId}/items/${editTarget.id}`, payload);
-                setSuccessMessage("Item surat jalan berhasil diperbarui.");
-            } else {
-                await api.post(`/surat-jalan/${suratJalanId}/items`, payload);
-                setSuccessMessage("Item surat jalan berhasil ditambahkan.");
-            }
+            await api.put(`/surat-jalan/${suratJalanId}/items/${editTarget.id}`, {
+                penjualan_item_id: editTarget.penjualan_item_id,
+                keterangan: form.keterangan || null,
+            });
+            setSuccessMessage("Keterangan item surat jalan berhasil diperbarui.");
 
             resetForm();
             await fetchData();
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const apiErrors = error.response?.data?.errors;
-                if (apiErrors && typeof apiErrors === "object") {
-                    const mappedErrors: FieldErrors = {};
-                    for (const key of Object.keys(apiErrors)) {
-                        const firstMessage = apiErrors[key]?.[0];
-                        if (typeof firstMessage === "string" && key in initialForm) {
-                            mappedErrors[key as keyof FormType] = firstMessage;
-                        }
-                    }
-                    if (Object.keys(mappedErrors).length > 0) {
-                        setFieldErrors(mappedErrors);
-                        setErrorMessage("");
-                        setSuccessMessage("");
-                        return;
-                    }
-                }
-            }
-
             setErrorMessage(extractErrorMessage(error));
             setSuccessMessage("");
         } finally {
             setSubmitting(false);
         }
     };
-
-    const handleDelete = async () => {
-        if (!deleteTarget) return;
-
-        try {
-            setSubmitting(true);
-            await api.delete(`/surat-jalan/${suratJalanId}/items/${deleteTarget.id}`);
-            setDeleteTarget(null);
-            setErrorMessage("");
-            setSuccessMessage("Item surat jalan berhasil dihapus.");
-            await fetchData();
-        } catch (error) {
-            setErrorMessage(extractErrorMessage(error));
-            setSuccessMessage("");
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const selectedBarang = useMemo(
-        () => barangOptions.find((item) => item.id === form.penjualan_item_id) ?? null,
-        [barangOptions, form.penjualan_item_id]
-    );
 
     const filteredItems = useMemo(() => {
         const normalizedSearch = search.trim().toLowerCase();
@@ -265,6 +159,99 @@ export default function Page() {
         (normalizedCurrentPage - 1) * perPage,
         normalizedCurrentPage * perPage
     );
+
+    const handleExportPdf = () => {
+        if (!detail) {
+            return;
+        }
+
+        const doc = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4",
+        });
+
+        doc.setFont("times", "normal");
+
+        doc.setFont("times", "bold");
+        doc.setFontSize(15);
+        doc.text(EXPORT_COMPANY_NAME, 18, 20);
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(9);
+        doc.text(EXPORT_COMPANY_LINES, 18, 26);
+
+        doc.setFont("times", "bold");
+        doc.setFontSize(22);
+        doc.text("SURAT", 125, 18);
+        doc.text("JALAN", 125, 29);
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(10);
+        doc.text(`No. ${detail.nomor_surat_jalan || "-"}`, 125, 38);
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(10);
+        doc.text(`Kepada: ${detail.sppg?.nama_sppg ?? "-"}`, 18, 52);
+        doc.text(`Tanggal: ${formatTanggal(detail.tanggal)}`, 125, 52);
+        doc.text(`No. PO: ${detail.no_po || "-"}`, 125, 59);
+        doc.text(`Armada: ${detail.armada_ref?.nama_unit || "-"}`, 125, 66);
+        doc.text(`No. Polisi: ${detail.armada_ref?.no_pol || "-"}`, 125, 73);
+        doc.text(`Driver: ${detail.driver?.nama || "-"}`, 125, 80);
+
+        autoTable(doc, {
+            startY: 88,
+            theme: "grid",
+            styles: {
+                font: "times",
+                fontSize: 10,
+                lineColor: [120, 120, 120],
+                lineWidth: 0.15,
+                cellPadding: 2,
+                textColor: [20, 20, 20],
+            },
+            headStyles: {
+                fillColor: [255, 255, 255],
+                textColor: [20, 20, 20],
+                fontStyle: "bold",
+            },
+            columnStyles: {
+                0: { halign: "center", cellWidth: 12 },
+                1: { cellWidth: 70 },
+                2: { halign: "center", cellWidth: 22 },
+                3: { halign: "center", cellWidth: 28 },
+                4: { cellWidth: 45 },
+            },
+            head: [["No", "Nama Barang", "Satuan", "Jumlah\nBarang", "Keterangan"]],
+            body: items.map((item, index) => [
+                index + 1,
+                item.nama_barang,
+                item.satuan ?? "-",
+                Number(item.qty),
+                item.keterangan || "",
+            ]),
+        });
+
+        const finalY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 120;
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(10);
+        doc.text("Tanda terima", 18, finalY + 10);
+
+        doc.setFont("times", "bold");
+        doc.text("Sopir", 60, finalY + 20, { align: "center" });
+        doc.text("Penerima", 150, finalY + 20, { align: "center" });
+
+        doc.setFont("times", "normal");
+        doc.text("(                             )", 60, finalY + 55, { align: "center" });
+        doc.text("(                             )", 150, finalY + 55, { align: "center" });
+
+        const safeNumber = (detail.nomor_surat_jalan || `surat-jalan-${suratJalanId}`)
+            .replace(/[\\/:*?"<>|]/g, "-")
+            .replace(/\s+/g, "-");
+
+        doc.save(`${safeNumber}.pdf`);
+    };
 
     return (
         <div className="p-6 space-y-6">
@@ -309,13 +296,15 @@ export default function Page() {
                     className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
                 />
 
-                <button
-                    onClick={openCreateForm}
-                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
-                >
-                    <Plus size={16} />
-                    Tambah Barang
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleExportPdf}
+                        className="flex items-center gap-2 bg-green-600 shadow-lg shadow-black/10 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
+                    >
+                        <FileDown size={16} />
+                        Export
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
@@ -361,12 +350,6 @@ export default function Page() {
                                             >
                                                 <Pencil size={14} />
                                             </button>
-                                            <button
-                                                onClick={() => setDeleteTarget(item)}
-                                                className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -408,9 +391,7 @@ export default function Page() {
                 {openForm ? (
                     <Modal onClose={resetForm}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-lg space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                {editTarget ? "Edit Item" : "Tambah Item"}
-                            </h2>
+                            <h2 className="text-lg font-semibold">Edit Keterangan Item</h2>
 
                             {errorMessage ? (
                                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -418,84 +399,17 @@ export default function Page() {
                                 </div>
                             ) : null}
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Barang dari Penjualan</label>
-                                <select
-                                    value={form.penjualan_item_id ?? ""}
-                                    onChange={(e) => {
-                                        const option = barangOptions.find((item) => item.id === Number(e.target.value));
-                                        setForm({
-                                            penjualan_item_id: e.target.value ? Number(e.target.value) : null,
-                                            nama_barang: option?.nama_barang ?? "",
-                                            qty: option ? String(Number(option.qty)) : "",
-                                            satuan: option?.satuan ?? "",
-                                            keterangan: form.keterangan,
-                                        });
-                                        clearFieldError("penjualan_item_id");
-                                        clearFieldError("nama_barang");
-                                    }}
-                                    className="w-full border p-2 rounded-md"
-                                >
-                                    <option value="">Pilih Barang Penjualan</option>
-                                    {barangOptions.map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.nama_barang} - {Number(item.qty)} {item.satuan}
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-700 space-y-1">
+                                <p>
+                                    Barang: <span className="font-semibold">{editTarget?.nama_barang ?? "-"}</span>
+                                </p>
+                                <p>
+                                    Qty: <span className="font-semibold">{editTarget ? Number(editTarget.qty) : 0}</span>
+                                </p>
+                                <p>
+                                    Satuan: <span className="font-semibold">{editTarget?.satuan ?? "-"}</span>
+                                </p>
                             </div>
-
-                            {!form.penjualan_item_id ? (
-                                <>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Nama Barang</label>
-                                        <input
-                                            value={form.nama_barang}
-                                            onChange={(e) => {
-                                                setForm({ ...form, nama_barang: e.target.value });
-                                                clearFieldError("nama_barang");
-                                            }}
-                                            className={`w-full border p-2 rounded-md ${fieldErrors.nama_barang ? "border-red-500 focus:outline-red-500" : ""}`}
-                                            placeholder="Masukkan nama barang"
-                                        />
-                                        {fieldErrors.nama_barang ? <p className="text-xs text-red-600">{fieldErrors.nama_barang}</p> : null}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Qty</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={form.qty}
-                                                onChange={(e) => {
-                                                    setForm({ ...form, qty: e.target.value });
-                                                    clearFieldError("qty");
-                                                }}
-                                                className={`w-full border p-2 rounded-md ${fieldErrors.qty ? "border-red-500 focus:outline-red-500" : ""}`}
-                                                placeholder="Qty"
-                                            />
-                                            {fieldErrors.qty ? <p className="text-xs text-red-600">{fieldErrors.qty}</p> : null}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Satuan</label>
-                                            <input
-                                                value={form.satuan}
-                                                onChange={(e) => setForm({ ...form, satuan: e.target.value })}
-                                                className="w-full border p-2 rounded-md"
-                                                placeholder="Satuan"
-                                            />
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                                    Qty: <span className="font-semibold">{selectedBarang ? Number(selectedBarang.qty) : 0}</span>
-                                    {" | "}
-                                    Satuan: <span className="font-semibold">{selectedBarang?.satuan ?? "-"}</span>
-                                </div>
-                            )}
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Keterangan</label>
@@ -520,31 +434,6 @@ export default function Page() {
                                     className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
                                 >
                                     {submitting ? "Menyimpan..." : "Simpan"}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </Modal>
-                ) : null}
-            </AnimatePresence>
-
-            <AnimatePresence>
-                {deleteTarget ? (
-                    <Modal onClose={() => setDeleteTarget(null)}>
-                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-                            <h2 className="text-lg font-semibold">Hapus Item?</h2>
-                            <div className="flex justify-center gap-2">
-                                <button
-                                    onClick={() => setDeleteTarget(null)}
-                                    className="px-4 py-2 bg-gray-200 rounded-md"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    onClick={() => void handleDelete()}
-                                    disabled={submitting}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-md disabled:opacity-50"
-                                >
-                                    {submitting ? "Menghapus..." : "Hapus"}
                                 </button>
                             </div>
                         </motion.div>

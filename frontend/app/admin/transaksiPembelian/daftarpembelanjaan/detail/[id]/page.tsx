@@ -25,6 +25,10 @@ type WarehouseStockItem = {
     satuan_terkecil: string;
 };
 
+function calculateKebutuhan(qty: number | string, stok: number | string) {
+    return Math.max(Number(qty || 0) - Number(stok || 0), 0);
+}
+
 function normalizeUnit(value: string) {
     const normalized = value.trim().toLowerCase();
 
@@ -135,21 +139,24 @@ export default function Page() {
             }
 
             if (!map.has(key)) {
+                const stok = warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0;
+                const qty = Number(item.qty);
+
                 map.set(key, {
                     ...item,
-                    qty: Number(item.qty),
-                    stok:
-                        warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0,
-                    kebutuhan: Number(item.kebutuhan),
+                    qty,
+                    stok,
+                    kebutuhan: calculateKebutuhan(qty, stok),
                 });
             } else {
                 const existing = map.get(key)!;
+                const qty = Number(existing.qty) + Number(item.qty);
 
                 map.set(key, {
                     ...existing,
-                    qty: Number(existing.qty) + Number(item.qty),
+                    qty,
                     stok: existing.stok,
-                    kebutuhan: Number(existing.kebutuhan) + Number(item.kebutuhan),
+                    kebutuhan: calculateKebutuhan(qty, existing.stok),
                 });
             }
         }
@@ -195,7 +202,7 @@ export default function Page() {
                     qty: editTarget.qty,
                     satuan: editTarget.satuan,
                     stok: editTarget.stok,
-                    kebutuhan: editTarget.kebutuhan,
+                    kebutuhan: calculateKebutuhan(editTarget.qty, editTarget.stok),
                     nama_supplier: selectedSupplier?.nama ?? "",
                 }
             );

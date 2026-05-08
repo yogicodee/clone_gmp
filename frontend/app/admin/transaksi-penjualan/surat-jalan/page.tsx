@@ -35,7 +35,7 @@ type SuratJalan = {
     armada_id: number | null;
     driver_id: number | null;
     sppg?: SppgOption | null;
-    armadaRef?: ArmadaOption | null;
+    armada_ref?: ArmadaOption | null;
     driver?: DriverOption | null;
 };
 
@@ -329,8 +329,8 @@ export default function Page() {
                                     <td className="p-3">{item.sppg?.nama_sppg ?? "-"}</td>
                                     <td className="p-3">{formatTanggal(item.tanggal)}</td>
                                     <td className="p-3">{item.no_po ?? "-"}</td>
-                                    <td className="p-3">{item.armadaRef?.nama_unit ?? "-"}</td>
-                                    <td className="p-3">{item.armadaRef?.no_pol ?? "-"}</td>
+                                    <td className="p-3">{item.armada_ref?.nama_unit ?? "-"}</td>
+                                    <td className="p-3">{item.armada_ref?.no_pol ?? "-"}</td>
                                     <td className="p-3">{item.driver?.nama ?? "-"}</td>
                                     <td className="p-3 capitalize">{item.status}</td>
                                     <td className="p-3 flex justify-center gap-2">

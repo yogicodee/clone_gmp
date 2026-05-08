@@ -15,8 +15,6 @@ class PenjualanController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $this->syncHeadersFromOrderPenawaran();
-
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
             'sort_field' => ['nullable', Rule::in(['id', 'kode_penjualan', 'tanggal', 'total_harga', 'status'])],
@@ -63,14 +61,31 @@ class PenjualanController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $payload = $this->validatePayload($request);
-        $payload['total_harga'] = $payload['total_harga'] ?? 0;
+        $payload = $request->validate([
+            'tanggal' => ['required', 'date'],
+        ]);
 
-        $record = Penjualan::query()->create($payload);
+        $orders = OrderPenawaran::query()
+            ->with('items')
+            ->whereDate('tanggal_dikirim', $payload['tanggal'])
+            ->orderBy('id')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            throw ValidationException::withMessages([
+                'tanggal' => 'Belum ada order penawaran dengan tanggal kirim tersebut.',
+            ]);
+        }
+
+        $records = DB::transaction(function () use ($orders): array {
+            return $orders
+                ->map(fn (OrderPenawaran $order) => $this->syncFromOrderPenawaran($order))
+                ->all();
+        });
 
         return response()->json([
-            'message' => 'Data penjualan berhasil ditambahkan.',
-            'data' => $record,
+            'message' => 'Data penjualan berhasil disinkronkan dari order penawaran.',
+            'data' => $records,
         ], 201);
     }
 
@@ -153,33 +168,23 @@ class PenjualanController extends Controller
         return $payload;
     }
 
-    private function syncHeadersFromOrderPenawaran(): void
+    private function syncFromOrderPenawaran(OrderPenawaran $order): Penjualan
     {
-        $orders = OrderPenawaran::query()
-            ->with('items')
-            ->whereNotNull('tanggal_dikirim')
-            ->orderBy('id')
-            ->get();
+        $existing = Penjualan::query()
+            ->where('order_penawaran_id', $order->id)
+            ->first();
 
-        DB::transaction(function () use ($orders): void {
-            foreach ($orders as $order) {
-                $existing = Penjualan::query()
-                    ->where('order_penawaran_id', $order->id)
-                    ->first();
-
-                Penjualan::query()->updateOrCreate(
-                    ['order_penawaran_id' => $order->id],
-                    [
-                        'kode_penjualan' => $existing?->kode_penjualan ?: $this->generateKodePenjualan($order->id),
-                        'tanggal' => $order->tanggal_dikirim,
-                        'status' => $existing?->status ?: 'draft',
-                        'total_harga' => $order->items->sum(
-                            fn ($item) => (float) $item->qty * (float) $item->harga_satuan
-                        ),
-                    ]
-                );
-            }
-        });
+        return Penjualan::query()->updateOrCreate(
+            ['order_penawaran_id' => $order->id],
+            [
+                'kode_penjualan' => $existing?->kode_penjualan ?: $this->generateKodePenjualan($order->id),
+                'tanggal' => $order->tanggal_dikirim,
+                'status' => $existing?->status ?: 'draft',
+                'total_harga' => $order->items->sum(
+                    fn ($item) => (float) $item->qty * (float) $item->harga_satuan
+                ),
+            ]
+        );
     }
 
     private function generateKodePenjualan(int $orderPenawaranId): string

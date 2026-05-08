@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\TransaksiPenjualan\TandaTerima;
 
 use App\Http\Controllers\Controller;
 use App\Models\TransaksiPenjualan\SuratJalan;
+use App\Models\TransaksiPenjualan\SuratJalanItem;
 use App\Models\TransaksiPenjualan\TandaTerima;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,11 +60,29 @@ class TandaTerimaController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $record = TandaTerima::query()->create($this->validatePayload($request));
+        $payload = $request->validate([
+            'tanggal' => ['required', 'date'],
+        ]);
+
+        $suratJalanRecords = SuratJalan::query()
+            ->with('items')
+            ->whereDate('tanggal', $payload['tanggal'])
+            ->orderBy('id')
+            ->get();
+
+        if ($suratJalanRecords->isEmpty()) {
+            throw ValidationException::withMessages([
+                'tanggal' => 'Belum ada surat jalan pada tanggal tersebut.',
+            ]);
+        }
+
+        $records = $suratJalanRecords
+            ->map(fn (SuratJalan $suratJalan) => $this->syncFromSuratJalan($suratJalan))
+            ->values();
 
         return response()->json([
-            'message' => 'Data tanda terima berhasil ditambahkan.',
-            'data' => $record->load(['sppg:id,nama_sppg', 'armadaRef:id,nama_unit,no_pol', 'akuntan:id,nama', 'driver:id,nama']),
+            'message' => 'Data tanda terima berhasil disinkronkan dari surat jalan.',
+            'data' => $records,
         ], 201);
     }
 
@@ -160,5 +179,73 @@ class TandaTerimaController extends Controller
         $payload['driver_id'] = $payload['driver_id'] ?? $suratJalan->driver_id;
 
         return $payload;
+    }
+
+    private function syncFromSuratJalan(SuratJalan $suratJalan): TandaTerima
+    {
+        $record = TandaTerima::query()
+            ->where('nomor_surat_jalan', $suratJalan->nomor_surat_jalan)
+            ->first();
+
+        if ($record === null) {
+            $record = new TandaTerima();
+            $record->nomor_tanda_terima = $this->generateNomorTandaTerima($suratJalan);
+            $record->status = 'draft';
+        }
+
+        $record->nomor_surat_jalan = $suratJalan->nomor_surat_jalan;
+        $record->no_po = $suratJalan->no_po;
+        $record->tanggal = $suratJalan->tanggal;
+        $record->sppg_id = $suratJalan->sppg_id;
+        $record->armada_id = $suratJalan->armada_id;
+        $record->driver_id = $suratJalan->driver_id;
+        $record->save();
+
+        $this->syncItemsFromSuratJalan($record, $suratJalan);
+
+        return $record->fresh([
+            'sppg:id,nama_sppg',
+            'armadaRef:id,nama_unit,no_pol',
+            'akuntan:id,nama',
+            'driver:id,nama',
+            'items',
+        ]);
+    }
+
+    private function syncItemsFromSuratJalan(TandaTerima $tandaTerima, SuratJalan $suratJalan): void
+    {
+        $tandaTerima->items()->delete();
+
+        $suratJalanItems = $suratJalan->relationLoaded('items')
+            ? $suratJalan->items
+            : $suratJalan->items()->orderBy('id')->get();
+
+        $suratJalanItems->each(function (SuratJalanItem $item) use ($tandaTerima): void {
+            $tandaTerima->items()->create([
+                'penjualan_item_id' => $item->penjualan_item_id,
+                'nama_barang' => $item->nama_barang,
+                'qty' => $item->qty,
+                'satuan' => $item->satuan,
+                'keterangan' => $item->keterangan,
+            ]);
+        });
+    }
+
+    private function generateNomorTandaTerima(SuratJalan $suratJalan): string
+    {
+        $base = 'TT-' . trim((string) $suratJalan->nomor_surat_jalan);
+        $nomor = $base;
+        $counter = 2;
+
+        while (
+            TandaTerima::query()
+                ->where('nomor_tanda_terima', $nomor)
+                ->exists()
+        ) {
+            $nomor = $base . '-' . $counter;
+            $counter++;
+        }
+
+        return $nomor;
     }
 }

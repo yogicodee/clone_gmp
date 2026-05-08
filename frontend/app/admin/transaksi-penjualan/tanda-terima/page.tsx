@@ -1,579 +1,441 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-
-import { useFetch } from "@/hooks/useFetch";
-import api from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Eye, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import axios from "axios";
 
-/* ================= TYPE ================= */
-type Product = {
-  id: number;
-  nama_akuntan: string;
-  nama_sppg: string;
-  tanggal: string;
-  no_po: string;
-  armada: string;
-  no_pol: string;
-  nama_driver: string;
+type SppgOption = {
+    id: number;
+    nama_sppg: string;
 };
 
-type FormType = Omit<Product, "id">;
+type ArmadaOption = {
+    id: number;
+    nama_unit: string;
+    no_pol: string;
+};
 
-/* ================= MASTER DROPDOWN ================= */
+type KaryawanOption = {
+    id: number;
+    nama: string;
+};
 
-const sppgOptions = [
-  "SPPG Surabaya",
-  "SPPG Sidoarjo",
-  "SPPG Gresik",
-];
+type TandaTerimaRecord = {
+    id: number;
+    nomor_tanda_terima: string;
+    nomor_surat_jalan: string;
+    no_po: string | null;
+    tanggal: string;
+    status: "draft" | "selesai" | "batal";
+    sppg_id: number | null;
+    armada_id: number | null;
+    akuntan_id: number | null;
+    driver_id: number | null;
+    sppg?: SppgOption | null;
+    armadaRef?: ArmadaOption | null;
+    akuntan?: KaryawanOption | null;
+    driver?: KaryawanOption | null;
+};
 
-const armadaOptions = [
-  {
-    armada: "Truck Box 01",
-    no_pol: "L 1234 AB",
-  },
-  {
-    armada: "Truck Box 02",
-    no_pol: "W 5678 CD",
-  },
-  {
-    armada: "Pickup 03",
-    no_pol: "N 9988 EF",
-  },
-];
+type FormType = {
+    tanggal: string;
+};
+
+type FieldErrors = Partial<Record<keyof FormType, string>>;
+
+const initialForm: FormType = {
+    tanggal: "",
+};
+
+const formatTanggal = (value: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    });
+};
 
 export default function Page() {
-  const { data: sppgData } = useFetch<any>("/sppg");
-  const { data: armadaData } = useFetch<any>("/armada");
+    const router = useRouter();
 
-  const router = useRouter();
+    const [records, setRecords] = useState<TandaTerimaRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const [data, setData] = useState<Product[]>([
-    {
-      id: 1,
-      nama_akuntan: "Tanti Dwi",
-      nama_sppg: "SPPG Surabaya",
-      tanggal: "2026-04-22",
-      no_po: "PO-001",
-      armada: "Truck Box 01",
-      no_pol: "L 1234 AB",
-      nama_driver: "Subandi"
-    }
-  ]);
+    const [form, setForm] = useState<FormType>(initialForm);
+    const [openForm, setOpenForm] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<TandaTerimaRecord | null>(null);
 
-  const [form, setForm] = useState<FormType>({
-    nama_akuntan: "",
-    nama_sppg: "",
-    tanggal: "",
-    no_po: "",
-    armada: "",
-    no_pol: "",
-    nama_driver: ""
-  });
+    const [search, setSearch] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const perPage = 10;
 
-  const [editId, setEditId] = useState<number | null>(null);
-  const [openForm, setOpenForm] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+    const fetchData = useCallback(async () => {
+        try {
+            setLoading(true);
+            setErrorMessage("");
 
-  /* ================= FILTER ================= */
+            const [
+                recordsResponse,
+            ] = await Promise.all([
+                api.get("/tanda-terima", { params: { per_page: 100 } }),
+            ]);
 
-  const [search, setSearch] = useState("");
-
-  /* ================= SORT ================= */
-
-  const [sortField, setSortField] =
-    useState<keyof Product>("nama_akuntan");
-
-  const [sortOrder, setSortOrder] =
-    useState<"asc" | "desc">("asc");
-
-
-  /* ================= PAGINATION ================= */
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const perPage = 10;
-
-
-  /* ================= HANDLE ================= */
-
-  const handleSubmit = () => {
-
-    if (
-      !form.nama_akuntan ||
-      !form.nama_sppg ||
-      !form.tanggal ||
-      !form.no_po ||
-      !form.armada ||
-      !form.nama_driver
-    ) return;
-
-    if (editId) {
-      setData(prev =>
-        prev.map(item =>
-          item.id === editId
-            ? { ...item, ...form }
-            : item
-        )
-      );
-    } else {
-      setData(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          ...form
+            setRecords(recordsResponse.data.data ?? []);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoading(false);
         }
-      ]);
-    }
+    }, []);
 
-    resetForm();
-  };
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void fetchData();
+    }, [fetchData]);
 
+    const resetForm = () => {
+        setForm(initialForm);
+        setFieldErrors({});
+        setErrorMessage("");
+        setOpenForm(false);
+    };
 
-  const handleEdit = (item: Product) => {
-    const { id, ...rest } = item;
-    setForm(rest);
-    setEditId(id);
-    setOpenForm(true);
-  };
+    const clearFieldError = (field: keyof FormType) => {
+        setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+        setErrorMessage("");
+    };
 
+    const openCreateForm = () => {
+        setForm(initialForm);
+        setFieldErrors({});
+        setErrorMessage("");
+        setSuccessMessage("");
+        setOpenForm(true);
+    };
 
-  const handleDelete = () => {
-    if (deleteId) {
-      setData(prev =>
-        prev.filter(item =>
-          item.id !== deleteId
-        )
-      );
-      setDeleteId(null);
-    }
-  };
+    const handleSubmit = async () => {
+        const nextFieldErrors: FieldErrors = {};
 
+        if (!form.tanggal) nextFieldErrors.tanggal = "Tanggal wajib diisi.";
 
-  const resetForm = () => {
-    setForm({
-      nama_akuntan: "",
-      nama_sppg: "",
-      tanggal: "",
-      no_po: "",
-      armada: "",
-      no_pol: "",
-      nama_driver: ""
-    });
+        if (Object.keys(nextFieldErrors).length > 0) {
+            setFieldErrors(nextFieldErrors);
+            setSuccessMessage("");
+            return;
+        }
 
-    setEditId(null);
-    setOpenForm(false);
-  };
+        try {
+            setSubmitting(true);
+            setFieldErrors({});
+            setErrorMessage("");
+            setSuccessMessage("");
 
+            await api.post("/tanda-terima", { tanggal: form.tanggal });
+            setSuccessMessage("Data tanda terima berhasil disinkronkan dari surat jalan.");
 
-  const handleSort = (field: keyof Product) => {
-    if (sortField === field) {
-      setSortOrder(
-        sortOrder === "asc"
-          ? "desc"
-          : "asc"
-      );
-    } else {
-      setSortField(field);
-      setSortOrder("asc");
-    }
-  };
+            resetForm();
+            await fetchData();
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                const apiErrors = error.response?.data?.errors;
+                if (apiErrors && typeof apiErrors === "object") {
+                    const mappedErrors: FieldErrors = {};
+                    for (const key of Object.keys(apiErrors)) {
+                        const firstMessage = apiErrors[key]?.[0];
+                        if (typeof firstMessage === "string" && key in initialForm) {
+                            mappedErrors[key as keyof FormType] = firstMessage;
+                        }
+                    }
 
+                    if (Object.keys(mappedErrors).length > 0) {
+                        setFieldErrors(mappedErrors);
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        return;
+                    }
+                }
+            }
 
-  /* ================= AUTO NO POL ================= */
+            setErrorMessage(extractErrorMessage(error));
+            setSuccessMessage("");
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
-  useEffect(() => {
-    const found = armadaOptions.find(
-      item => item.armada === form.armada
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+
+        try {
+            setSubmitting(true);
+            setErrorMessage("");
+            setSuccessMessage("");
+            await api.delete(`/tanda-terima/${deleteTarget.id}`);
+            setDeleteTarget(null);
+            setSuccessMessage("Data tanda terima berhasil dihapus.");
+            await fetchData();
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const filteredData = useMemo(() => {
+        const keyword = search.trim().toLowerCase();
+        return records.filter((item) => {
+            if (!keyword) return true;
+            return (
+                item.nomor_tanda_terima.toLowerCase().includes(keyword) ||
+                item.nomor_surat_jalan.toLowerCase().includes(keyword) ||
+                (item.no_po ?? "").toLowerCase().includes(keyword) ||
+                (item.sppg?.nama_sppg ?? "").toLowerCase().includes(keyword) ||
+                (item.akuntan?.nama ?? "").toLowerCase().includes(keyword) ||
+                (item.driver?.nama ?? "").toLowerCase().includes(keyword)
+            );
+        });
+    }, [records, search]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / perPage));
+    const normalizedCurrentPage = Math.min(currentPage, totalPages);
+    const paginatedData = filteredData.slice(
+        (normalizedCurrentPage - 1) * perPage,
+        normalizedCurrentPage * perPage
     );
 
-    if (found) {
-      setForm(prev => ({
-        ...prev,
-        no_pol: found.no_pol
-      }));
-    }
+    return (
+        <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold">Tanda Terima</h1>
+            </div>
 
-  }, [form.armada]);
+            {errorMessage && !openForm ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
 
+            {successMessage ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {successMessage}
+                </div>
+            ) : null}
 
-  /* ================= FILTER + SORT ================= */
+            <div className="flex items-center justify-between">
+                <input
+                    placeholder="Cari surat jalan / no PO / SPPG..."
+                    value={search}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                    }}
+                    className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
+                />
 
-  const filteredData = useMemo(() => {
-
-    let result = [...data];
-
-    if (search) {
-      result = result.filter(item =>
-        item.nama_akuntan
-          .toLowerCase()
-          .includes(search.toLowerCase()) ||
-
-        item.no_po
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      );
-    }
-
-    result.sort((a, b) => {
-
-      const aVal = String(a[sortField]).toLowerCase();
-      const bVal = String(b[sortField]).toLowerCase();
-
-      if (sortOrder === "asc") {
-        return aVal.localeCompare(bVal);
-      }
-
-      return bVal.localeCompare(aVal);
-
-    });
-
-    return result;
-
-  }, [
-    data,
-    search,
-    sortField,
-    sortOrder
-  ]);
-
-
-  /* ================= PAGINATION ================= */
-
-  const totalPages = Math.ceil(
-    filteredData.length / perPage
-  );
-
-  const paginatedData = filteredData.slice(
-    (currentPage - 1) * perPage,
-    currentPage * perPage
-  );
-
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
-
-
-  return (
-    <div className="p-6 space-y-6">
-
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">
-          Tanda Terima
-        </h1>
-      </div>
-
-
-      <div className="flex items-center justify-between">
-        <input
-          placeholder="Cari nomor surat jalan / no PO..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded-md w-1/4 bg-white shadow"
-        />
-
-        <button
-          onClick={() => setOpenForm(true)}
-          className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
-        >
-          <Plus size={16} />
-          Tambah Data
-        </button>
-
-      </div>
-
-
-      <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
-
-        <table className="w-full text-sm">
-
-          <thead className="bg-white shadow-lg">
-            <tr>
-
-              <th className="p-3">No</th>
-              <th className="p-3">No PO</th>
-
-              <th className="p-3">
-                <button onClick={() => handleSort("nama_akuntan")} className="flex items-center gap-2">
-                  Nama Akuntan
-                  <ArrowUpDown size={14} />
+                <button
+                    onClick={openCreateForm}
+                    className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
+                >
+                    <Plus size={16} />
+                    Tambah Data
                 </button>
-              </th>
-              <th className="p-3 text-left">SPPG</th>
-              <th className="p-3 text-left">Tanggal</th>
-              <th className="p-3 text-left">Armada</th>
-              <th className="p-3 text-left">No Pol</th>
-              <th className="p-3 text-left">Driver</th>
+            </div>
 
-              <th className="p-3 text-center">
-                Aksi
-              </th>
+            <div className="bg-white/70 backdrop-blur-lg rounded-lg shadow overflow-auto">
+                <table className="w-full text-sm">
+                    <thead className="bg-white shadow-lg">
+                        <tr>
+                            <th className="p-3">No</th>
+                            <th className="p-3 text-left">No. Surat Jalan</th>
+                            <th className="p-3 text-left">No. PO</th>
+                            <th className="p-3 text-left">Tanggal</th>
+                            <th className="p-3 text-left">SPPG</th>
+                            <th className="p-3 text-left">Driver</th>
+                            <th className="p-3 text-left">Status</th>
+                            <th className="p-3 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            <tr>
+                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                    Memuat data...
+                                </td>
+                            </tr>
+                        ) : paginatedData.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                    Belum ada data tanda terima.
+                                </td>
+                            </tr>
+                        ) : (
+                            paginatedData.map((item, index) => (
+                                <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
+                                    <td className="p-3 text-center">
+                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                    </td>
+                                    <td className="p-3">{item.nomor_surat_jalan}</td>
+                                    <td className="p-3">{item.no_po || "-"}</td>
+                                    <td className="p-3">{formatTanggal(item.tanggal)}</td>
+                                    <td className="p-3">{item.sppg?.nama_sppg || "-"}</td>
+                                    <td className="p-3">{item.driver?.nama || "-"}</td>
+                                    <td className="p-3 capitalize">{item.status}</td>
+                                    <td className="p-3">
+                                        <div className="flex justify-center gap-2">
+                                            <button
+                                                onClick={() => router.push(`/admin/transaksi-penjualan/tanda-terima/detail/${item.id}`)}
+                                                className="p-2 bg-green-500/30 text-green-700 rounded-md"
+                                            >
+                                                <Eye size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setDeleteTarget(item)}
+                                                className="p-2 bg-red-500/30 text-red-700 rounded-md"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
-            </tr>
-          </thead>
+            <div className="flex justify-end gap-2">
+                <button
+                    disabled={normalizedCurrentPage === 1}
+                    onClick={() => setCurrentPage((prev) => prev - 1)}
+                    className="px-3 py-1 border rounded-md disabled:opacity-50"
+                >
+                    Prev
+                </button>
 
-          <tbody>
-
-            {paginatedData.map((item, index) => (
-
-              <tr
-                key={item.id}
-                className="border-t border-primary/20 hover:bg-white/50"
-              >
-
-                <td className="p-3 text-center">
-                  {(currentPage - 1) * perPage + index + 1}
-                </td>
-
-                <td className="p-3">{item.no_po}</td>
-                <td className="p-3">{item.nama_akuntan}</td>
-                <td className="p-3">{item.nama_sppg}</td>
-                <td className="p-3">{item.tanggal}</td>
-                <td className="p-3">{item.armada}</td>
-                <td className="p-3">{item.no_pol}</td>
-                <td className="p-3">{item.nama_driver}</td>
-
-                <td className="p-3 flex justify-center gap-2">
-                  <button
-                    onClick={() =>
-                      router.push(
-                        `/admin/transaksi-penjualan/tanda-terima/detail/${item.id}`
-                      )
-                    }
-                    className="p-2 bg-green-500/30 text-green-700 rounded-md"
-                  >
-                    <Eye size={14} />
-                  </button>
-
-                  <button
-                    onClick={() => handleEdit(item)}
-                    className="p-2 bg-blue-500/30 text-blue-700 rounded-md"
-                  >
-                    <Pencil size={14} />
-                  </button>
-
-                  <button
-                    onClick={() => setDeleteId(item.id)}
-                    className="p-2 bg-red-500/30 text-red-700 rounded-md"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-
-                </td>
-
-              </tr>
-
-            ))}
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-
-      <AnimatePresence>
-        {openForm && (
-          <Modal onClose={resetForm}>
-
-            <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-
-              <h2 className="text-lg font-semibold">
-                {editId ? "Edit Data" : "Tambah Data"}
-              </h2>
-
-              <input
-                placeholder="Nomor Surat Jalan"
-                value={form.nama_akuntan}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    nama_akuntan: e.target.value
-                  })
-                }
-                className="w-full border p-2 rounded-md"
-              />
-
-
-              {/* Selesct SPPG */}
-              <select
-                value={form.nama_sppg}
-                onChange={(e) => setForm({ ...form, nama_sppg: e.target.value })}
-                className="w-full border p-2 rounded-md"
-              >
-                <option value="">Pilih SPPG</option>
-                {sppgData.map((item, i) => (
-                  <option key={i} value={item.nama_sppg}>
-                    {item.nama_sppg}
-                  </option>
+                {Array.from({ length: totalPages }, (_, index) => (
+                    <button
+                        key={index}
+                        onClick={() => setCurrentPage(index + 1)}
+                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                    >
+                        {index + 1}
+                    </button>
                 ))}
-              </select>
-
-
-              <input
-                type="date"
-                value={form.tanggal}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    tanggal: e.target.value
-                  })
-                }
-                className="w-full border p-2 rounded-md"
-              />
-
-
-              <input
-                placeholder="No PO"
-                value={form.no_po}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    no_po: e.target.value
-                  })
-                }
-                className="w-full border p-2 rounded-md"
-              />
-
-
-              {/* Select Armada */}
-              <select
-                value={form.armada}
-                onChange={(e) => {
-                  const selectedArmada = e.target.value;
-
-                  const selectedData = armadaData.find(
-                    item => item.nama_unit === selectedArmada
-                  );
-
-                  setForm({
-                    ...form,
-                    armada: selectedArmada,
-                    no_pol: selectedData?.no_pol || ""
-                  });
-                }}
-                className="w-full border p-2 rounded-md"
-              >
-                <option value="">Pilih Armada</option>
-
-                {armadaData.map((item, i) => (
-                  <option
-                    key={i}
-                    value={item.nama_unit}
-                  >
-                    {item.nama_unit}
-                  </option>
-                ))}
-              </select>
-
-
-              <input
-                value={form.no_pol}
-                readOnly
-                placeholder="No Polisi Auto"
-                className="w-full border p-2 rounded-md bg-gray-100"
-              />
-
-
-              <input
-                placeholder="Nama Driver"
-                value={form.nama_driver}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    nama_driver: e.target.value
-                  })
-                }
-                className="w-full border p-2 rounded-md"
-              />
-
-
-              <div className="flex justify-end gap-2">
 
                 <button
-                  onClick={resetForm}
-                  className="px-4 py-2 bg-gray-200 rounded-md"
+                    disabled={normalizedCurrentPage === totalPages}
+                    onClick={() => setCurrentPage((prev) => prev + 1)}
+                    className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
-                  Batal
+                    Next
                 </button>
+            </div>
 
-                <button
-                  onClick={handleSubmit}
-                  className="px-4 py-2 bg-blue-700 text-white rounded-md"
-                >
-                  Simpan
-                </button>
+            <AnimatePresence>
+                {openForm ? (
+                    <Modal onClose={resetForm}>
+                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-xl space-y-4">
+                            <h2 className="text-lg font-semibold">Tambah Data</h2>
 
-              </div>
+                            {errorMessage ? (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    {errorMessage}
+                                </div>
+                            ) : null}
 
-            </motion.div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Tanggal</label>
+                                <input
+                                    type="date"
+                                    value={form.tanggal}
+                                    onChange={(e) => {
+                                        setForm((prev) => ({ ...prev, tanggal: e.target.value }));
+                                        clearFieldError("tanggal");
+                                    }}
+                                    className={`w-full border p-2 rounded-md ${fieldErrors.tanggal ? "border-red-500 focus:outline-red-500" : ""}`}
+                                />
+                                {fieldErrors.tanggal ? <p className="text-xs text-red-600">{fieldErrors.tanggal}</p> : null}
+                            </div>
 
-          </Modal>
-        )}
-      </AnimatePresence>
+                            <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                Pilih tanggal, lalu sistem akan otomatis membuat atau memperbarui tanda terima dari semua surat jalan pada tanggal yang sama.
+                            </div>
 
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    onClick={resetForm}
+                                    className="px-4 py-2 bg-gray-200 rounded-md"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={() => void handleSubmit()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
+                                >
+                                    {submitting ? "Menyimpan..." : "Simpan"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </Modal>
+                ) : null}
+            </AnimatePresence>
 
-      <AnimatePresence>
-        {deleteId && (
-          <Modal onClose={() => setDeleteId(null)}>
-
-            <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
-
-              <h2 className="text-lg font-semibold">
-                Hapus Data?
-              </h2>
-
-              <div className="flex justify-center gap-2">
-
-                <button
-                  onClick={() => setDeleteId(null)}
-                  className="px-4 py-2 bg-gray-200 rounded-md"
-                >
-                  Batal
-                </button>
-
-                <button
-                  onClick={handleDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md"
-                >
-                  Hapus
-                </button>
-
-              </div>
-
-            </motion.div>
-
-          </Modal>
-        )}
-      </AnimatePresence>
-
-
-    </div>
-  )
+            <AnimatePresence>
+                {deleteTarget ? (
+                    <Modal onClose={() => setDeleteTarget(null)}>
+                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-sm text-center space-y-4">
+                            <h2 className="text-lg font-semibold">Hapus Data?</h2>
+                            <p className="text-sm text-gray-600">
+                                Tanda terima <strong>{deleteTarget.nomor_tanda_terima}</strong> akan dihapus.
+                            </p>
+                            <div className="flex justify-center gap-2">
+                                <button
+                                    onClick={() => setDeleteTarget(null)}
+                                    className="px-4 py-2 bg-gray-200 rounded-md"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={() => void handleDelete()}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md disabled:opacity-50"
+                                >
+                                    {submitting ? "Menghapus..." : "Hapus"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </Modal>
+                ) : null}
+            </AnimatePresence>
+        </div>
+    );
 }
 
-
-/* MODAL tetap */
 function Modal({
-  children,
-  onClose,
+    children,
+    onClose,
 }: {
-  children: React.ReactNode;
-  onClose: () => void;
+    children: React.ReactNode;
+    onClose: () => void;
 }) {
-
-  return (
-    <motion.div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div onClick={(e) => e.stopPropagation()}>
-        {children}
-      </div>
-    </motion.div>
-  )
-
+    return (
+        <motion.div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+            onClick={onClose}
+        >
+            <div onClick={(e) => e.stopPropagation()}>{children}</div>
+        </motion.div>
+    );
 }

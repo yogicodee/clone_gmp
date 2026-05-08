@@ -29,6 +29,7 @@ import {
   Mails,
   Building,
   Handbag,
+  Wallet,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
@@ -84,6 +85,15 @@ const menus = [
       { icon: <Mails size={16} />, label: "Surat Jalan", path: "/admin/transaksi-penjualan/surat-jalan" },
       { icon: <FileText size={16} />, label: "Tanda Terima", path: "/admin/transaksi-penjualan/tanda-terima" },
       { icon: <ScrollText size={16} />, label: "Invoice Penjualan", path: "/admin/transaksi-penjualan/invoice-penjualan" },
+    ],
+  },
+   {
+    label: "Keuangan & Akuntansi",
+    icon: <Wallet />,
+    key: "keuangan",
+    children: [
+      { icon: <Boxes size={16} />, label: "Pemasukan", path: "/admin/keuangan/pemasukan" },
+      { icon: <TrendingUp size={16} />, label: "Pengeluaran", path: "/admin/keuangan/pengeluaran" },
     ],
   },
   {
@@ -182,7 +192,22 @@ export default function Sidebar({ open }: { open: boolean }) {
 }
 
 /* COMPONENT TETAP */
-function SidebarItem({ icon, label, open, onClick, active }: any) {
+type SidebarItemProps = {
+  icon: React.ReactNode;
+  label: string;
+  open: boolean;
+  onClick: () => void;
+  active: boolean;
+};
+
+type SubItemProps = {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active: boolean;
+};
+
+function SidebarItem({ icon, label, open, onClick, active }: SidebarItemProps) {
   return (
     <div
       onClick={onClick}
@@ -196,7 +221,7 @@ function SidebarItem({ icon, label, open, onClick, active }: any) {
   );
 }
 
-function SubItem({ icon, label, onClick, active }: any) {
+function SubItem({ icon, label, onClick, active }: SubItemProps) {
   return (
     <div
       onClick={onClick}

@@ -22,6 +22,10 @@ type WarehouseStockItem = {
     satuan_terkecil: string;
 };
 
+function calculateKebutuhan(qty: number | string, stok: number | string) {
+    return Math.max(Number(qty || 0) - Number(stok || 0), 0);
+}
+
 function normalizeUnit(value: string) {
     const normalized = value.trim().toLowerCase();
 
@@ -121,7 +125,10 @@ export default function Page() {
 
                 qty: Number(item.qty) || 0,
                 stok: warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0,
-                kebutuhan: Number(item.kebutuhan) || 0,
+                kebutuhan: calculateKebutuhan(
+                    Number(item.qty) || 0,
+                    warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0
+                ),
             };
         });
     }, [items, supplierOptions, warehouseStockMap]);

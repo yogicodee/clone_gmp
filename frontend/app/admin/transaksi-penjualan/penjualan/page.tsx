@@ -23,12 +23,10 @@ type Penjualan = {
     tanggal: string;
     total_harga: string | number;
     status: "draft" | "selesai" | "batal";
-    orderPenawaran?: OrderPenawaranSource | null;
+    order_penawaran?: OrderPenawaranSource | null;
 };
 
 type FormType = {
-    order_penawaran_id: number | null;
-    kode_penjualan: string;
     tanggal: string;
     status: "draft" | "selesai" | "batal";
 };
@@ -36,8 +34,6 @@ type FormType = {
 type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 const initialForm: FormType = {
-    order_penawaran_id: null,
-    kode_penjualan: "",
     tanggal: "",
     status: "draft",
 };
@@ -104,8 +100,6 @@ export default function Page() {
     const handleEdit = (item: Penjualan) => {
         setEditTarget(item);
         setForm({
-            order_penawaran_id: item.order_penawaran_id,
-            kode_penjualan: item.kode_penjualan ?? "",
             tanggal: item.tanggal ?? "",
             status: item.status,
         });
@@ -116,12 +110,7 @@ export default function Page() {
 
     const handleSubmit = async () => {
         const nextFieldErrors: FieldErrors = {};
-        const isLinkedOrder = form.order_penawaran_id !== null;
-
-        if (!isLinkedOrder) {
-            if (!form.kode_penjualan.trim()) nextFieldErrors.kode_penjualan = "Kode penjualan wajib diisi.";
-            if (!form.tanggal) nextFieldErrors.tanggal = "Tanggal wajib diisi.";
-        }
+        if (!form.tanggal) nextFieldErrors.tanggal = "Tanggal wajib diisi.";
 
         if (!form.status) nextFieldErrors.status = "Status wajib dipilih.";
 
@@ -137,23 +126,19 @@ export default function Page() {
             setErrorMessage("");
             setSuccessMessage("");
 
-            const payload = isLinkedOrder
-                ? {
-                    order_penawaran_id: form.order_penawaran_id,
-                    status: form.status,
-                }
-                : {
-                    kode_penjualan: form.kode_penjualan,
+            if (editTarget) {
+                await api.put(`/penjualan/${editTarget.id}`, {
+                    order_penawaran_id: editTarget.order_penawaran_id,
+                    kode_penjualan: editTarget.kode_penjualan,
                     tanggal: form.tanggal,
                     status: form.status,
-                };
-
-            if (editTarget) {
-                await api.put(`/penjualan/${editTarget.id}`, payload);
+                });
                 setSuccessMessage("Penjualan berhasil diperbarui.");
             } else {
-                await api.post("/penjualan", payload);
-                setSuccessMessage("Penjualan manual berhasil ditambahkan.");
+                await api.post("/penjualan", {
+                    tanggal: form.tanggal,
+                });
+                setSuccessMessage("Penjualan berhasil disinkronkan dari order penawaran pada tanggal tersebut.");
             }
 
             resetForm();
@@ -224,8 +209,8 @@ export default function Page() {
             return (
                 item.kode_penjualan.toLowerCase().includes(normalizedSearch) ||
                 item.status.toLowerCase().includes(normalizedSearch) ||
-                (item.orderPenawaran?.nama_pembeli ?? "").toLowerCase().includes(normalizedSearch) ||
-                (item.orderPenawaran?.keterangan ?? "").toLowerCase().includes(normalizedSearch)
+                (item.order_penawaran?.nama_pembeli ?? "").toLowerCase().includes(normalizedSearch) ||
+                (item.order_penawaran?.keterangan ?? "").toLowerCase().includes(normalizedSearch)
             );
         });
 
@@ -323,7 +308,7 @@ export default function Page() {
                                     </td>
                                     <td className="p-3">{item.kode_penjualan}</td>
                                     <td className="p-3">{formatTanggal(item.tanggal)}</td>
-                                    <td className="p-3">{item.orderPenawaran?.nama_pembeli ?? "-"}</td>
+                                    <td className="p-3">{item.order_penawaran?.nama_pembeli ?? "-"}</td>
                                     <td className="p-3">Rp {formatRupiah(item.total_harga)}</td>
                                     <td className="p-3 capitalize">{item.status}</td>
                                     <td className="p-3 flex justify-center gap-2">
@@ -394,7 +379,7 @@ export default function Page() {
                     <Modal onClose={resetForm}>
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
                             <h2 className="text-lg font-semibold">
-                                {editTarget ? "Edit Data" : "Tambah Data Manual"}
+                                {editTarget ? "Edit Data" : "Tambah Data"}
                             </h2>
 
                             {errorMessage ? (
@@ -403,23 +388,15 @@ export default function Page() {
                                 </div>
                             ) : null}
 
-                            {form.order_penawaran_id ? (
+                            {editTarget ? (
                                 <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                                    Penjualan ini terhubung ke order penawaran. Kode, tanggal, dan total harga mengikuti order sumber.
+                                    Penjualan ini terhubung ke order penawaran. Kode penjualan dan total harga mengikuti order sumber.
                                 </div>
-                            ) : null}
-
-                            <input
-                                placeholder="Kode Penjualan"
-                                value={form.kode_penjualan}
-                                onChange={(e) => {
-                                    setForm({ ...form, kode_penjualan: e.target.value });
-                                    clearFieldError("kode_penjualan");
-                                }}
-                                disabled={form.order_penawaran_id !== null}
-                                className={`w-full border p-2 rounded-md ${fieldErrors.kode_penjualan ? "border-red-500 focus:outline-red-500" : ""} ${form.order_penawaran_id ? "bg-slate-50 text-slate-500" : ""}`}
-                            />
-                            {fieldErrors.kode_penjualan ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.kode_penjualan}</p> : null}
+                            ) : (
+                                <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                    Saat disimpan, semua order penawaran dengan tanggal kirim yang sama akan ikut dibuat menjadi data penjualan.
+                                </div>
+                            )}
 
                             <input
                                 type="date"
@@ -428,8 +405,7 @@ export default function Page() {
                                     setForm({ ...form, tanggal: e.target.value });
                                     clearFieldError("tanggal");
                                 }}
-                                disabled={form.order_penawaran_id !== null}
-                                className={`w-full border p-2 rounded-md ${fieldErrors.tanggal ? "border-red-500 focus:outline-red-500" : ""} ${form.order_penawaran_id ? "bg-slate-50 text-slate-500" : ""}`}
+                                className={`w-full border p-2 rounded-md ${fieldErrors.tanggal ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
                             {fieldErrors.tanggal ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.tanggal}</p> : null}
 

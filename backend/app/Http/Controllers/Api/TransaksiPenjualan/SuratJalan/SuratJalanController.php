@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\SuratJalan;
 
 use App\Http\Controllers\Controller;
+use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\SuratJalan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class SuratJalanController extends Controller
@@ -55,16 +57,23 @@ class SuratJalanController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $record = SuratJalan::query()->create($this->validatePayload($request));
+        $record = DB::transaction(function () use ($request): SuratJalan {
+            $record = SuratJalan::query()->create($this->validatePayload($request));
+            $this->syncItemsFromPenjualan($record);
+
+            return $record;
+        });
 
         return response()->json([
             'message' => 'Data surat jalan berhasil ditambahkan.',
-            'data' => $record->load(['sppg:id,nama_sppg', 'armadaRef:id,nama_unit,no_pol', 'driver:id,nama']),
+            'data' => $record->fresh(['sppg:id,nama_sppg', 'armadaRef:id,nama_unit,no_pol', 'driver:id,nama', 'items.penjualanItem']),
         ], 201);
     }
 
     public function show(SuratJalan $suratJalan): JsonResponse
     {
+        $this->syncItemsFromPenjualan($suratJalan);
+
         $suratJalan->load([
             'sppg:id,nama_sppg',
             'armadaRef:id,nama_unit,no_pol',
@@ -80,11 +89,14 @@ class SuratJalanController extends Controller
 
     public function update(Request $request, SuratJalan $suratJalan): JsonResponse
     {
-        $suratJalan->update($this->validatePayload($request, $suratJalan));
+        DB::transaction(function () use ($request, $suratJalan): void {
+            $suratJalan->update($this->validatePayload($request, $suratJalan));
+            $this->syncItemsFromPenjualan($suratJalan);
+        });
 
         return response()->json([
             'message' => 'Data surat jalan berhasil diperbarui.',
-            'data' => $suratJalan->fresh(['sppg:id,nama_sppg', 'armadaRef:id,nama_unit,no_pol', 'driver:id,nama']),
+            'data' => $suratJalan->fresh(['sppg:id,nama_sppg', 'armadaRef:id,nama_unit,no_pol', 'driver:id,nama', 'items.penjualanItem']),
         ]);
     }
 
@@ -113,5 +125,59 @@ class SuratJalanController extends Controller
             'driver_id' => ['nullable', 'integer', 'exists:karyawan,id'],
             'status' => ['required', Rule::in(['draft', 'selesai', 'batal'])],
         ]);
+    }
+
+    private function syncItemsFromPenjualan(SuratJalan $suratJalan): void
+    {
+        if ($suratJalan->tanggal === null) {
+            $suratJalan->items()->delete();
+
+            return;
+        }
+
+        $sourceItems = Penjualan::query()
+            ->with('items')
+            ->whereDate('tanggal', $suratJalan->tanggal)
+            ->orderBy('id')
+            ->get()
+            ->flatMap(fn (Penjualan $penjualan) => $penjualan->items)
+            ->values();
+
+        $existingItems = $suratJalan->items()
+            ->whereNotNull('penjualan_item_id')
+            ->get()
+            ->keyBy('penjualan_item_id');
+
+        $sourceIds = $sourceItems
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        foreach ($sourceItems as $sourceItem) {
+            $currentItem = $existingItems->get($sourceItem->id);
+
+            $suratJalan->items()->updateOrCreate(
+                [
+                    'surat_jalan_id' => $suratJalan->id,
+                    'penjualan_item_id' => $sourceItem->id,
+                ],
+                [
+                    'nama_barang' => $sourceItem->nama_barang,
+                    'qty' => $sourceItem->qty,
+                    'satuan' => $sourceItem->satuan,
+                    'keterangan' => $currentItem?->keterangan,
+                ]
+            );
+        }
+
+        $suratJalan->items()
+            ->where(function ($query) use ($sourceIds): void {
+                $query->whereNull('penjualan_item_id');
+
+                if (! empty($sourceIds)) {
+                    $query->orWhereNotIn('penjualan_item_id', $sourceIds);
+                }
+            })
+            ->delete();
     }
 }
