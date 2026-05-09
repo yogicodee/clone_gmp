@@ -102,7 +102,6 @@ const menus = [
     key: "laporandananalisa",
     children: [
       { icon: <Boxes size={16} />, label: "Laporan Stok Barang", path: "/admin/laporan/laporan-stok-barang" },
-      { icon: <TrendingUp size={16} />, label: "Penjualan Per SPPG", path: "/admin/laporan/laporan-penjualan" },
       { icon: <FileText size={16} />, label: "Laba Rugi Transaksional", path: "/admin/laporan/laporan-laba-rugi" },
     ],
   },

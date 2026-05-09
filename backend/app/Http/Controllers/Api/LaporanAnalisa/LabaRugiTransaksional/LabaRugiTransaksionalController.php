@@ -3,88 +3,167 @@
 namespace App\Http\Controllers\Api\LaporanAnalisa\LabaRugiTransaksional;
 
 use App\Http\Controllers\Controller;
-use App\Models\TransaksiPenjualan\Penjualan;
-use App\Models\WarehouseSystem\WarehouseInbound;
+use App\Models\KeuanganAkuntansi\Pemasukan;
+use App\Models\KeuanganAkuntansi\Pengeluaran;
+use App\Models\MasterData\Sppg;
+use App\Models\TransaksiPenjualan\InvoicePenjualan;
+use App\Models\TransaksiPenjualan\TandaTerima;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
 
 class LabaRugiTransaksionalController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'periode' => ['nullable', Rule::in(['harian', 'bulanan', 'tahunan'])],
-            'tanggal' => ['nullable', 'date'],
+            'tanggal_awal' => ['nullable', 'date'],
+            'tanggal_akhir' => ['nullable', 'date'],
+            'sppg_id' => ['nullable', 'integer', 'exists:sppg,id'],
         ]);
 
-        $periode = $validated['periode'] ?? 'bulanan';
-        $tanggal = isset($validated['tanggal'])
-            ? Carbon::parse($validated['tanggal'], 'Asia/Jakarta')
-            : Carbon::today('Asia/Jakarta');
+        $tanggalAwal = isset($validated['tanggal_awal'])
+            ? Carbon::parse($validated['tanggal_awal'], 'Asia/Jakarta')->startOfDay()
+            : Carbon::today('Asia/Jakarta')->startOfMonth();
 
-        $penjualan = Penjualan::query()
-            ->where('status', 'selesai')
-            ->get(['tanggal', 'total_harga']);
+        $tanggalAkhir = isset($validated['tanggal_akhir'])
+            ? Carbon::parse($validated['tanggal_akhir'], 'Asia/Jakarta')->endOfDay()
+            : Carbon::today('Asia/Jakarta')->endOfDay();
 
-        $inbounds = WarehouseInbound::query()
-            ->get(['tanggal_masuk', 'total_harga']);
+        if ($tanggalAwal->greaterThan($tanggalAkhir)) {
+            [$tanggalAwal, $tanggalAkhir] = [$tanggalAkhir->copy()->startOfDay(), $tanggalAwal->copy()->endOfDay()];
+        }
 
-        $rows = $this->buildRows($penjualan, $inbounds, $periode, $tanggal);
+        $sppgId = $validated['sppg_id'] ?? null;
+
+        $invoiceRows = $this->buildInvoiceRows($tanggalAwal, $tanggalAkhir, $sppgId);
+        $pemasukanRows = $this->buildPemasukanRows($tanggalAwal, $tanggalAkhir);
+        $pengeluaranRows = $this->buildPengeluaranRows($tanggalAwal, $tanggalAkhir);
+
+        $totalPendapatanPenjualan = (float) $invoiceRows->sum('pendapatan');
+        $totalPemasukanLain = (float) $pemasukanRows->sum('jumlah');
+        $totalPengeluaran = (float) $pengeluaranRows->sum('total');
+
+        $activeSppg = $sppgId ? Sppg::query()->find($sppgId) : null;
 
         return response()->json([
             'message' => 'Laporan laba rugi transaksional berhasil diambil.',
             'data' => [
-                'periode' => $periode,
-                'tanggal_acuan' => $tanggal->toDateString(),
-                'total_pendapatan' => (float) $rows->sum('pendapatan'),
-                'total_beban' => (float) $rows->sum('beban'),
-                'total_laba_rugi' => (float) $rows->sum('laba_rugi'),
-                'rows' => $rows->values(),
+                'filters' => [
+                    'tanggal_awal' => $tanggalAwal->toDateString(),
+                    'tanggal_akhir' => $tanggalAkhir->toDateString(),
+                    'sppg_id' => $sppgId,
+                    'sppg' => $activeSppg?->nama_sppg,
+                ],
+                'summary' => [
+                    'total_pendapatan_penjualan' => $totalPendapatanPenjualan,
+                    'total_pemasukan_lain' => $totalPemasukanLain,
+                    'total_pengeluaran' => $totalPengeluaran,
+                    'laba_bersih' => $totalPendapatanPenjualan + $totalPemasukanLain - $totalPengeluaran,
+                ],
+                'invoice_rows' => $invoiceRows->values(),
+                'pemasukan_rows' => $pemasukanRows->values(),
+                'pengeluaran_rows' => $pengeluaranRows->values(),
+                'sppg_options' => Sppg::query()
+                    ->orderBy('nama_sppg')
+                    ->get(['id', 'nama_sppg'])
+                    ->map(fn (Sppg $sppg): array => [
+                        'id' => $sppg->id,
+                        'nama_sppg' => $sppg->nama_sppg,
+                    ])
+                    ->values(),
             ],
         ]);
     }
 
-    private function buildRows(Collection $penjualan, Collection $inbounds, string $periode, Carbon $tanggal): Collection
+    private function buildInvoiceRows(Carbon $tanggalAwal, Carbon $tanggalAkhir, ?int $sppgId): Collection
     {
-        $filteredPenjualan = $penjualan
-            ->filter(fn ($item): bool => $this->matchesPeriod(Carbon::parse($item->tanggal), $periode, $tanggal))
-            ->groupBy(fn ($item): string => Carbon::parse($item->tanggal)->toDateString())
-            ->map(fn (Collection $items): float => (float) $items->sum('total_harga'));
+        $invoicePenjualan = InvoicePenjualan::query()
+            ->with([
+                'penjualan:id,tanggal',
+                'sppg:id,nama_sppg',
+            ])
+            ->whereHas('penjualan', function ($query) use ($tanggalAwal, $tanggalAkhir): void {
+                $query->whereBetween('tanggal', [
+                    $tanggalAwal->toDateString(),
+                    $tanggalAkhir->toDateString(),
+                ]);
+            })
+            ->when($sppgId, fn ($query) => $query->where('sppg_id', $sppgId))
+            ->orderByDesc('tanggal_invoice')
+            ->orderByDesc('id')
+            ->get();
 
-        $filteredInbounds = $inbounds
-            ->filter(fn ($item): bool => $this->matchesPeriod(Carbon::parse($item->tanggal_masuk), $periode, $tanggal))
-            ->groupBy(fn ($item): string => Carbon::parse($item->tanggal_masuk)->toDateString())
-            ->map(fn (Collection $items): float => (float) $items->sum('total_harga'));
+        $noPoLookup = TandaTerima::query()
+            ->when($sppgId, fn ($query) => $query->where('sppg_id', $sppgId))
+            ->whereBetween('tanggal', [
+                $tanggalAwal->toDateString(),
+                $tanggalAkhir->toDateString(),
+            ])
+            ->get(['tanggal', 'sppg_id', 'no_po'])
+            ->mapWithKeys(function (TandaTerima $tandaTerima): array {
+                return [
+                    $tandaTerima->tanggal.'|'.$tandaTerima->sppg_id => $tandaTerima->no_po,
+                ];
+            });
 
-        $dates = $filteredPenjualan->keys()
-            ->merge($filteredInbounds->keys())
-            ->unique()
-            ->sort()
-            ->values();
-
-        return $dates->map(function (string $date) use ($filteredPenjualan, $filteredInbounds): array {
-            $pendapatan = (float) ($filteredPenjualan[$date] ?? 0);
-            $beban = (float) ($filteredInbounds[$date] ?? 0);
+        return $invoicePenjualan->map(function (InvoicePenjualan $invoice) use ($noPoLookup): array {
+            $tanggalKirim = $invoice->penjualan?->tanggal?->format('Y-m-d');
+            $key = $tanggalKirim && $invoice->sppg_id
+                ? $tanggalKirim.'|'.$invoice->sppg_id
+                : null;
 
             return [
-                'tanggal' => $date,
-                'pendapatan' => $pendapatan,
-                'beban' => $beban,
-                'laba_rugi' => $pendapatan - $beban,
+                'id' => $invoice->id,
+                'tanggal_kirim' => $tanggalKirim,
+                'tanggal_invoice' => $invoice->tanggal_invoice?->format('Y-m-d'),
+                'nomor_invoice' => $invoice->nomor_invoice,
+                'no_po' => $key ? ($noPoLookup[$key] ?? '-') : '-',
+                'sppg' => $invoice->sppg?->nama_sppg ?? '-',
+                'pendapatan' => (float) $invoice->total_tagihan,
+                'status_pembayaran' => $invoice->status_pembayaran,
             ];
-        })->sortByDesc('tanggal')->values();
+        });
     }
 
-    private function matchesPeriod(Carbon $sourceDate, string $periode, Carbon $tanggal): bool
+    private function buildPemasukanRows(Carbon $tanggalAwal, Carbon $tanggalAkhir): Collection
     {
-        return match ($periode) {
-            'harian' => $sourceDate->isSameDay($tanggal),
-            'tahunan' => $sourceDate->year === $tanggal->year,
-            default => $sourceDate->year === $tanggal->year
-                && $sourceDate->month === $tanggal->month,
-        };
+        return Pemasukan::query()
+            ->whereBetween('tanggal', [
+                $tanggalAwal->toDateString(),
+                $tanggalAkhir->toDateString(),
+            ])
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Pemasukan $pemasukan): array => [
+                'id' => $pemasukan->id,
+                'tanggal' => $pemasukan->tanggal?->format('Y-m-d'),
+                'jenis' => $pemasukan->jenis,
+                'jumlah' => (float) $pemasukan->jumlah,
+                'keterangan' => $pemasukan->keterangan,
+            ]);
+    }
+
+    private function buildPengeluaranRows(Carbon $tanggalAwal, Carbon $tanggalAkhir): Collection
+    {
+        return Pengeluaran::query()
+            ->whereBetween('tanggal_keluar', [
+                $tanggalAwal->toDateString(),
+                $tanggalAkhir->toDateString(),
+            ])
+            ->orderByDesc('tanggal_keluar')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Pengeluaran $pengeluaran): array => [
+                'id' => $pengeluaran->id,
+                'tanggal' => $pengeluaran->tanggal_keluar?->format('Y-m-d'),
+                'nama_operasional' => $pengeluaran->nama_operasional,
+                'qty' => (float) $pengeluaran->qty,
+                'satuan' => $pengeluaran->satuan,
+                'harga_satuan' => (float) $pengeluaran->harga_satuan,
+                'total' => (float) $pengeluaran->qty * (float) $pengeluaran->harga_satuan,
+            ]);
     }
 }

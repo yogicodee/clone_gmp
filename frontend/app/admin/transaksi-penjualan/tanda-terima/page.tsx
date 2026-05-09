@@ -368,10 +368,6 @@ export default function Page() {
                                 {fieldErrors.tanggal ? <p className="text-xs text-red-600">{fieldErrors.tanggal}</p> : null}
                             </div>
 
-                            <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                                Pilih tanggal, lalu sistem akan otomatis membuat atau memperbarui tanda terima dari semua surat jalan pada tanggal yang sama.
-                            </div>
-
                             <div className="flex justify-end gap-2">
                                 <button
                                     onClick={resetForm}

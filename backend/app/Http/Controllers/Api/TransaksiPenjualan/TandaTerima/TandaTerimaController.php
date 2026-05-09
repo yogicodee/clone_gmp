@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\TandaTerima;
 
 use App\Http\Controllers\Controller;
+use App\Models\TransaksiPembelian\OrderPenawaranItem;
+use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\SuratJalan;
 use App\Models\TransaksiPenjualan\SuratJalanItem;
 use App\Models\TransaksiPenjualan\TandaTerima;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -77,7 +80,11 @@ class TandaTerimaController extends Controller
         }
 
         $records = $suratJalanRecords
-            ->map(fn (SuratJalan $suratJalan) => $this->syncFromSuratJalan($suratJalan))
+            ->map(function (SuratJalan $suratJalan): TandaTerima {
+                $this->syncSuratJalanItemsFromPenjualan($suratJalan);
+
+                return $this->syncFromSuratJalan($suratJalan);
+            })
             ->values();
 
         return response()->json([
@@ -88,6 +95,16 @@ class TandaTerimaController extends Controller
 
     public function show(TandaTerima $tandaTerima): JsonResponse
     {
+        $suratJalan = SuratJalan::query()
+            ->with('items')
+            ->where('nomor_surat_jalan', $tandaTerima->nomor_surat_jalan)
+            ->first();
+
+        if ($suratJalan !== null) {
+            $this->syncSuratJalanItemsFromPenjualan($suratJalan);
+            $this->syncItemsFromSuratJalan($tandaTerima, $suratJalan);
+        }
+
         $tandaTerima->load([
             'sppg:id,nama_sppg',
             'armadaRef:id,nama_unit,no_pol',
@@ -188,6 +205,13 @@ class TandaTerimaController extends Controller
             ->first();
 
         if ($record === null) {
+            $record = TandaTerima::query()
+                ->whereDate('tanggal', $suratJalan->tanggal)
+                ->where('sppg_id', $suratJalan->sppg_id)
+                ->first();
+        }
+
+        if ($record === null) {
             $record = new TandaTerima();
             $record->nomor_tanda_terima = $this->generateNomorTandaTerima($suratJalan);
             $record->status = 'draft';
@@ -229,6 +253,106 @@ class TandaTerimaController extends Controller
                 'keterangan' => $item->keterangan,
             ]);
         });
+    }
+
+    private function syncSuratJalanItemsFromPenjualan(SuratJalan $suratJalan): void
+    {
+        if ($suratJalan->tanggal === null) {
+            $suratJalan->items()->delete();
+
+            return;
+        }
+
+        $sourceItems = $this->queryMatchingPenjualan($suratJalan)
+            ->flatMap(fn (Penjualan $penjualan) => $this->resolvePenjualanSourceItems($penjualan))
+            ->values();
+
+        $existingItems = $suratJalan->items()
+            ->get()
+            ->keyBy(fn ($item) => $this->buildSourceKey(
+                $item->penjualan_item_id,
+                $item->nama_barang,
+                $item->qty,
+                $item->satuan
+            ));
+
+        $suratJalan->items()->delete();
+
+        foreach ($sourceItems as $sourceItem) {
+            $currentItem = $existingItems->get($this->buildSourceKey(
+                $sourceItem['penjualan_item_id'],
+                $sourceItem['nama_barang'],
+                $sourceItem['qty'],
+                $sourceItem['satuan']
+            ));
+
+            $suratJalan->items()->create([
+                'penjualan_item_id' => $sourceItem['penjualan_item_id'],
+                'nama_barang' => $sourceItem['nama_barang'],
+                'qty' => $sourceItem['qty'],
+                'satuan' => $sourceItem['satuan'],
+                'keterangan' => $currentItem?->keterangan,
+            ]);
+        }
+    }
+
+    private function queryMatchingPenjualan(SuratJalan $suratJalan)
+    {
+        $namaSppg = $suratJalan->relationLoaded('sppg')
+            ? $suratJalan->sppg?->nama_sppg
+            : $suratJalan->sppg()->value('nama_sppg');
+
+        return Penjualan::query()
+            ->with('items')
+            ->whereDate('tanggal', $suratJalan->tanggal)
+            ->when($namaSppg, function ($query, string $currentNamaSppg): void {
+                $query->whereHas('orderPenawaran', function ($orderQuery) use ($currentNamaSppg): void {
+                    $orderQuery->where('nama_pembeli', $currentNamaSppg);
+                });
+            })
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function resolvePenjualanSourceItems(Penjualan $penjualan): Collection
+    {
+        if ($penjualan->items->isNotEmpty()) {
+            return $penjualan->items->map(fn ($item): array => [
+                'penjualan_item_id' => $item->id,
+                'nama_barang' => $item->nama_barang,
+                'qty' => $item->qty,
+                'satuan' => $item->satuan,
+            ]);
+        }
+
+        if ($penjualan->order_penawaran_id === null) {
+            return collect();
+        }
+
+        return OrderPenawaranItem::query()
+            ->where('order_penawaran_id', $penjualan->order_penawaran_id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (OrderPenawaranItem $item): array => [
+                'penjualan_item_id' => null,
+                'nama_barang' => $item->nama_barang,
+                'qty' => $item->qty,
+                'satuan' => $item->satuan,
+            ]);
+    }
+
+    private function buildSourceKey(
+        ?int $penjualanItemId,
+        string $namaBarang,
+        string|float|int $qty,
+        ?string $satuan
+    ): string {
+        return implode('|', [
+            $penjualanItemId ?? 'null',
+            mb_strtolower(trim($namaBarang)),
+            number_format((float) $qty, 2, '.', ''),
+            mb_strtolower(trim((string) $satuan)),
+        ]);
     }
 
     private function generateNomorTandaTerima(SuratJalan $suratJalan): string

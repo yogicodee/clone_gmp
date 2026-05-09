@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\SuratJalan\SuratJalanItem;
 
 use App\Http\Controllers\Controller;
+use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\PenjualanItem;
 use App\Models\TransaksiPenjualan\SuratJalan;
 use App\Models\TransaksiPenjualan\SuratJalanItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class SuratJalanItemController extends Controller
@@ -167,49 +169,96 @@ class SuratJalanItemController extends Controller
             return;
         }
 
-        $sourceItems = Penjualan::query()
+        $sourceItems = $this->queryMatchingPenjualan($suratJalan)
             ->with('items')
-            ->whereDate('tanggal', $suratJalan->tanggal)
             ->orderBy('id')
             ->get()
-            ->flatMap(fn (Penjualan $penjualan) => $penjualan->items)
+            ->flatMap(fn (Penjualan $penjualan) => $this->resolvePenjualanSourceItems($penjualan))
             ->values();
 
         $existingItems = $suratJalan->items()
-            ->whereNotNull('penjualan_item_id')
             ->get()
-            ->keyBy('penjualan_item_id');
+            ->keyBy(fn ($item) => $this->buildSourceKey(
+                $item->penjualan_item_id,
+                $item->nama_barang,
+                $item->qty,
+                $item->satuan
+            ));
 
-        $sourceIds = $sourceItems
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        $suratJalan->items()->delete();
 
         foreach ($sourceItems as $sourceItem) {
-            $currentItem = $existingItems->get($sourceItem->id);
+            $currentItem = $existingItems->get($this->buildSourceKey(
+                $sourceItem['penjualan_item_id'],
+                $sourceItem['nama_barang'],
+                $sourceItem['qty'],
+                $sourceItem['satuan']
+            ));
 
-            $suratJalan->items()->updateOrCreate(
-                [
-                    'surat_jalan_id' => $suratJalan->id,
-                    'penjualan_item_id' => $sourceItem->id,
-                ],
-                [
-                    'nama_barang' => $sourceItem->nama_barang,
-                    'qty' => $sourceItem->qty,
-                    'satuan' => $sourceItem->satuan,
-                    'keterangan' => $currentItem?->keterangan,
-                ]
-            );
+            $suratJalan->items()->create([
+                'penjualan_item_id' => $sourceItem['penjualan_item_id'],
+                'nama_barang' => $sourceItem['nama_barang'],
+                'qty' => $sourceItem['qty'],
+                'satuan' => $sourceItem['satuan'],
+                'keterangan' => $currentItem?->keterangan,
+            ]);
+        }
+    }
+
+    private function resolvePenjualanSourceItems(Penjualan $penjualan): Collection
+    {
+        if ($penjualan->items->isNotEmpty()) {
+            return $penjualan->items->map(fn ($item): array => [
+                'penjualan_item_id' => $item->id,
+                'nama_barang' => $item->nama_barang,
+                'qty' => $item->qty,
+                'satuan' => $item->satuan,
+            ]);
         }
 
-        $suratJalan->items()
-            ->where(function ($query) use ($sourceIds): void {
-                $query->whereNull('penjualan_item_id');
+        if ($penjualan->order_penawaran_id === null) {
+            return collect();
+        }
 
-                if (! empty($sourceIds)) {
-                    $query->orWhereNotIn('penjualan_item_id', $sourceIds);
+        return OrderPenawaranItem::query()
+            ->where('order_penawaran_id', $penjualan->order_penawaran_id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (OrderPenawaranItem $item): array => [
+                'penjualan_item_id' => null,
+                'nama_barang' => $item->nama_barang,
+                'qty' => $item->qty,
+                'satuan' => $item->satuan,
+            ]);
+    }
+
+    private function queryMatchingPenjualan(SuratJalan $suratJalan)
+    {
+        return Penjualan::query()
+            ->whereDate('tanggal', $suratJalan->tanggal)
+            ->when(
+                $suratJalan->sppg_id !== null && $suratJalan->relationLoaded('sppg')
+                    ? $suratJalan->sppg?->nama_sppg
+                    : $suratJalan->sppg()->value('nama_sppg'),
+                function ($query, string $namaSppg): void {
+                    $query->whereHas('orderPenawaran', function ($orderQuery) use ($namaSppg): void {
+                        $orderQuery->where('nama_pembeli', $namaSppg);
+                    });
                 }
-            })
-            ->delete();
+            );
+    }
+
+    private function buildSourceKey(
+        ?int $penjualanItemId,
+        string $namaBarang,
+        string|float|int $qty,
+        ?string $satuan
+    ): string {
+        return implode('|', [
+            $penjualanItemId ?? 'null',
+            mb_strtolower(trim($namaBarang)),
+            number_format((float) $qty, 2, '.', ''),
+            mb_strtolower(trim((string) $satuan)),
+        ]);
     }
 }

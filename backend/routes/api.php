@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Dashboard\DashboardSalesBySppg\DashboardSalesBySppgController;
 use App\Http\Controllers\Api\Dashboard\DashboardSummary\DashboardSummaryController;
+use App\Http\Controllers\Api\KeuanganAkuntansi\Pemasukan\PemasukanController;
+use App\Http\Controllers\Api\KeuanganAkuntansi\Pengeluaran\PengeluaranController;
 use App\Http\Controllers\Api\LaporanAnalisa\LabaRugiTransaksional\LabaRugiTransaksionalController;
 use App\Http\Controllers\Api\LaporanAnalisa\LaporanStokBarang\LaporanStokBarangController;
 use App\Http\Controllers\Api\LaporanAnalisa\PenjualanPerSppg\PenjualanPerSppgController;
@@ -53,6 +55,10 @@ Route::get('dashboard/penjualan-per-sppg', DashboardSalesBySppgController::class
 Route::get('laporan/stok-barang', LaporanStokBarangController::class);
 Route::get('laporan/laba-rugi-transaksional', LabaRugiTransaksionalController::class);
 Route::get('laporan/penjualan-per-sppg', PenjualanPerSppgController::class);
+
+//============================== Keuangan dan Akuntansi =====================
+Route::apiResource('pemasukan', PemasukanController::class);
+Route::apiResource('pengeluaran', PengeluaranController::class);
 
 // ============================== Master Data ===========================
 Route::apiResource('wilayah', WilayahController::class);
@@ -111,6 +117,7 @@ Route::post('tanda-terima/{tandaTerima}/items', [TandaTerimaItemController::clas
 Route::get('tanda-terima/{tandaTerima}/items/{item}', [TandaTerimaItemController::class, 'show']);
 Route::put('tanda-terima/{tandaTerima}/items/{item}', [TandaTerimaItemController::class, 'update']);
 Route::delete('tanda-terima/{tandaTerima}/items/{item}', [TandaTerimaItemController::class, 'destroy']);
+Route::get('invoice-penjualan/opsi-sppg', [InvoicePenjualanController::class, 'opsiSppgByTanggalKirim']);
 Route::apiResource('invoice-penjualan', InvoicePenjualanController::class);
 
 // ============================= Warehouse System ===========================
