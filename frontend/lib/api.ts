@@ -8,4 +8,37 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("token");
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const requestUrl = error?.config?.url ?? "";
+    const isAuthRequest = typeof requestUrl === "string" && requestUrl.includes("/auth/login");
+
+    if (
+      typeof window !== "undefined" &&
+      status === 401 &&
+      !isAuthRequest
+    ) {
+      window.localStorage.removeItem("token");
+      window.localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
+
+    return Promise.reject(error);
+  },
+);
+
 export default api;

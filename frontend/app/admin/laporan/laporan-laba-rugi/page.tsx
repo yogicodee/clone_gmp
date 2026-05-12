@@ -165,9 +165,14 @@ export default function Page() {
     }, [reportData]);
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">Laporan Laba Rugi Transaksional</h1>
+        <main className="space-y-6 rounded-3xl border border-white bg-white/30 p-6 backdrop-blur-2xl">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Laporan Laba Rugi Transaksional</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Ringkasan pendapatan, pemasukan lain, dan pengeluaran operasional per periode dengan opsi filter SPPG.
+                    </p>
+                </div>
             </div>
 
             {errorMessage ? (
@@ -176,7 +181,7 @@ export default function Page() {
                 </div>
             ) : null}
 
-            <div className="rounded-xl bg-white p-4 shadow space-y-4">
+            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-4">
                 <div className="grid gap-4 md:grid-cols-4">
                     <div className="space-y-1">
                         <label className="text-sm font-medium text-gray-700">Tanggal Awal</label>
@@ -217,7 +222,7 @@ export default function Page() {
                     <div className="flex items-end gap-2">
                         <button
                             onClick={() => setAppliedFilters(filters)}
-                            className="rounded-lg bg-linear-to-t from-secondary via-primary to-secondary px-4 py-2 text-white shadow-lg shadow-black/20 transition hover:-translate-y-1"
+                            className="rounded-lg bg-[#7f1d1d] px-4 py-2 text-white shadow-sm transition hover:bg-[#6b1616]"
                         >
                             Terapkan
                         </button>
@@ -226,7 +231,7 @@ export default function Page() {
                                 setFilters(defaultFilters);
                                 setAppliedFilters(defaultFilters);
                             }}
-                            className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800"
+                            className="rounded-lg border bg-white px-4 py-2 text-gray-800 hover:bg-gray-50"
                         >
                             Reset
                         </button>
@@ -245,7 +250,7 @@ export default function Page() {
                     const Icon = card.icon;
 
                     return (
-                        <div key={card.label} className={`rounded-xl border p-4 shadow-sm ${card.tone}`}>
+                        <div key={card.label} className={`rounded-2xl border p-4 shadow-sm ${card.tone}`}>
                             <div className="flex items-start justify-between gap-3">
                                 <div className="space-y-1">
                                     <p className="text-sm font-medium">{card.label}</p>
@@ -258,7 +263,7 @@ export default function Page() {
                 })}
             </div>
 
-            <div className="rounded-xl bg-white shadow overflow-hidden">
+            <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
                 <div className="border-b px-4 py-3">
                     <h2 className="text-lg font-semibold">Pendapatan Penjualan per SPPG</h2>
                     <p className="text-sm text-gray-500">
@@ -311,7 +316,7 @@ export default function Page() {
             </div>
 
             <div className="grid gap-6 xl:grid-cols-2">
-                <div className="rounded-xl bg-white shadow overflow-hidden">
+                <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
                     <div className="border-b px-4 py-3">
                         <h2 className="text-lg font-semibold">Pemasukan Lain</h2>
                     </div>
@@ -354,7 +359,7 @@ export default function Page() {
                     </div>
                 </div>
 
-                <div className="rounded-xl bg-white shadow overflow-hidden">
+                <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
                     <div className="border-b px-4 py-3">
                         <h2 className="text-lg font-semibold">Pengeluaran Operasional</h2>
                     </div>
@@ -399,6 +404,6 @@ export default function Page() {
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     );
 }

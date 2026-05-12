@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -20,27 +22,42 @@ class AuthController extends Controller
         ]);
 
         $role = $this->normalizeRole($credentials['role']);
+        $throttleKey = $this->throttleKey($request, $credentials['email']);
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+
+            throw ValidationException::withMessages([
+                'email' => ["Terlalu banyak percobaan login. Coba lagi dalam {$seconds} detik."],
+            ]);
+        }
 
         $user = User::query()->where('email', $credentials['email'])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            RateLimiter::hit($throttleKey, 300);
+
             throw ValidationException::withMessages([
                 'email' => ['Email atau password tidak valid.'],
             ]);
         }
 
         if ($this->normalizeRole((string) $user->role) !== $role) {
+            RateLimiter::hit($throttleKey, 300);
+
             throw ValidationException::withMessages([
                 'role' => ['Role login tidak sesuai dengan akun.'],
             ]);
         }
 
+        RateLimiter::clear($throttleKey);
         $plainToken = $user->issueApiToken();
 
         return response()->json([
             'message' => 'Login berhasil.',
             'token' => $plainToken,
             'token_type' => 'Bearer',
+            'expires_at' => optional($user->fresh()->api_token_expires_at)?->toIso8601String(),
             'user' => $this->formatUser($user->fresh()),
         ]);
     }
@@ -86,5 +103,10 @@ class AuthController extends Controller
             'superadmin', 'super_admin' => 'superadmin',
             default => 'admin',
         };
+    }
+
+    private function throttleKey(Request $request, string $email): string
+    {
+        return Str::lower($email).'|'.$request->ip();
     }
 }

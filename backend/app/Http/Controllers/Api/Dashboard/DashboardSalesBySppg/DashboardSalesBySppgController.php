@@ -7,21 +7,23 @@ use App\Models\TransaksiPenjualan\SuratJalanItem;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class DashboardSalesBySppgController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'periode' => ['nullable', Rule::in(['harian', 'bulanan', 'tahunan'])],
-            'tanggal' => ['nullable', 'date'],
+            'tanggal_awal' => ['nullable', 'date'],
+            'tanggal_akhir' => ['nullable', 'date', 'after_or_equal:tanggal_awal'],
         ]);
 
-        $periode = $validated['periode'] ?? 'bulanan';
-        $tanggal = isset($validated['tanggal'])
-            ? Carbon::parse($validated['tanggal'], 'Asia/Jakarta')
-            : Carbon::today('Asia/Jakarta');
+        $today = Carbon::today('Asia/Jakarta');
+        $tanggalAwal = isset($validated['tanggal_awal'])
+            ? Carbon::parse($validated['tanggal_awal'], 'Asia/Jakarta')->toDateString()
+            : $today->copy()->startOfMonth()->toDateString();
+        $tanggalAkhir = isset($validated['tanggal_akhir'])
+            ? Carbon::parse($validated['tanggal_akhir'], 'Asia/Jakarta')->toDateString()
+            : $today->toDateString();
 
         $query = SuratJalanItem::query()
             ->selectRaw('surat_jalan.sppg_id, sppg.nama_sppg, SUM(penjualan_items.total_harga) as total_penjualan')
@@ -31,15 +33,8 @@ class DashboardSalesBySppgController extends Controller
             ->join('sppg', 'sppg.id', '=', 'surat_jalan.sppg_id')
             ->whereNotNull('surat_jalan.sppg_id')
             ->where('surat_jalan.status', 'selesai')
-            ->where('penjualan.status', 'selesai');
-
-        match ($periode) {
-            'harian' => $query->whereDate('surat_jalan.tanggal', $tanggal->toDateString()),
-            'tahunan' => $query->whereYear('surat_jalan.tanggal', $tanggal->year),
-            default => $query
-                ->whereYear('surat_jalan.tanggal', $tanggal->year)
-                ->whereMonth('surat_jalan.tanggal', $tanggal->month),
-        };
+            ->where('penjualan.status', 'selesai')
+            ->whereBetween('surat_jalan.tanggal', [$tanggalAwal, $tanggalAkhir]);
 
         $rows = $query
             ->groupBy('surat_jalan.sppg_id', 'sppg.nama_sppg')
@@ -64,8 +59,8 @@ class DashboardSalesBySppgController extends Controller
         return response()->json([
             'message' => 'Data penjualan per SPPG berhasil diambil.',
             'data' => [
-                'periode' => $periode,
-                'tanggal_acuan' => $tanggal->toDateString(),
+                'tanggal_awal' => $tanggalAwal,
+                'tanggal_akhir' => $tanggalAkhir,
                 'total_penjualan_global' => $totalGlobal,
                 'breakdown' => $breakdown,
             ],

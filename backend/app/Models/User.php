@@ -27,6 +27,7 @@ class User extends Authenticatable
         'password',
         'role',
         'api_token',
+        'api_token_expires_at',
     ];
 
     /**
@@ -50,6 +51,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'api_token_expires_at' => 'datetime',
         ];
     }
 
@@ -59,6 +61,7 @@ class User extends Authenticatable
 
         $this->forceFill([
             'api_token' => hash('sha256', $plainToken),
+            'api_token_expires_at' => now()->addHours(8),
         ])->save();
 
         return $plainToken;
@@ -68,6 +71,7 @@ class User extends Authenticatable
     {
         $this->forceFill([
             'api_token' => null,
+            'api_token_expires_at' => null,
         ])->save();
     }
 }

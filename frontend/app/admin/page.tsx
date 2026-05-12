@@ -1,161 +1,144 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import LineChart from "@/components/mycomponents/chart/LineChart";
-import BarChart from "@/components/mycomponents/chart/BarChart";
-import PieChart from "@/components/mycomponents/chart/PieChart";
+import api from "@/lib/api";
 
 import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle
+  CardTitle,
 } from "@/components/ui/card";
-
 import { Button } from "@/components/ui/button";
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-import {
-  MoreVertical,
-  ShoppingBag,
-  Package,
-  RotateCcw,
-  DollarSign,
-  Wallet,
-  BadgePercent,
+  BadgeDollarSign,
+  Boxes,
+  CalendarDays,
+  CircleDollarSign,
+  TrendingDown,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-const stats = [
-  {
-    title: "Omset Hari Ini",
-    value: "2341+",
-    percent: 80,
-    color: "text-blue-500",
-    stroke: "stroke-blue-500",
-    bg: "bg-blue-100",
-    icon: ShoppingBag,
-  },
-  {
-    title: "Pengeluaran",
-    value: "178+",
-    percent: 30,
-    color: "text-green-500",
-    stroke: "stroke-green-500",
-    bg: "bg-green-100",
-    icon: Package,
-  },
-  {
-    title: "Keuntungan",
-    value: "67+",
-    percent: 20,
-    color: "text-red-500",
-    stroke: "stroke-red-500",
-    bg: "bg-red-100",
-    icon: RotateCcw,
-  },
-  {
-    title: "Saldo Bank",
-    value: "890+",
-    percent: 65,
-    color: "text-purple-500",
-    stroke: "stroke-purple-500",
-    bg: "bg-purple-100",
-    icon: DollarSign,
-  },
-  {
-    title: "Piutang",
-    value: "540+",
-    percent: 55,
-    color: "text-orange-500",
-    stroke: "stroke-orange-500",
-    bg: "bg-orange-100",
-    icon: Wallet,
-  },
-  {
-    title: "Hutang",
-    value: "320+",
-    percent: 40,
-    color: "text-yellow-500",
-    stroke: "stroke-yellow-500",
-    bg: "bg-yellow-100",
-    icon: Package,
-  },
-  {
-    title: "Margin %",
-    value: "28%",
-    percent: 28,
-    color: "text-emerald-500",
-    stroke: "stroke-emerald-500",
-    bg: "bg-emerald-100",
-    icon: BadgePercent,
-  },
-];
+type DashboardSummary = {
+  tanggal_awal: string;
+  tanggal_akhir: string;
+  omset_periode: number;
+  pengeluaran_periode: number;
+  keuntungan_periode: number;
+  invoice_belum_lunas: number;
+  nilai_stok: number;
+};
 
-function ProgressCircle({
-  percent,
-  color,
-}: {
-  percent: number;
-  color: string;
-}) {
+type CashflowPoint = {
+  label: string;
+  pendapatan: number;
+  pemasukan_lain: number;
+  pengeluaran: number;
+  laba_bersih: number;
+};
 
-  const radius = 22;
-  const circumference = 2 * Math.PI * radius;
+type SalesBreakdown = {
+  sppg_id: number;
+  nama_sppg: string;
+  total_penjualan: number;
+  persentase: number;
+};
 
-  const offset =
-    circumference - (percent / 100) * circumference;
+type ExpenseItem = {
+  nama_operasional: string;
+  total_pengeluaran: number;
+};
 
-  return (
-    <div className="relative h-16 w-16">
-      <svg
-        width="64"
-        height="64"
-        className="rotate-[-90deg]"
-      >
-        <circle
-          cx="32"
-          cy="32"
-          r={radius}
-          strokeWidth="6"
-          className="stroke-muted"
-          fill="none"
-        />
+type InventorySummary = {
+  total_qty: number;
+  total_nilai_stok: number;
+  total_baris_stok: number;
+  gudang_aktif: number;
+};
 
-        <circle
-          cx="32"
-          cy="32"
-          r={radius}
-          strokeWidth="6"
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className={color}
-        />
-      </svg>
+type DashboardFilters = {
+  tanggal_awal: string;
+  tanggal_akhir: string;
+};
 
-      <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold">
-        {percent}%
-      </span>
+type DayPhase = "pagi" | "siang" | "sore" | "malam";
 
-    </div>
-  );
-}
+const PIE_COLORS = ["#7f1d1d", "#15803d", "#d97706", "#2563eb", "#7c3aed", "#0891b2"];
+
+const toRupiah = (value: number) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+
+const toCompactNumber = (value: number) =>
+  new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+
+const formatInputDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getStartOfMonth = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), 1);
+
+const createDefaultFilters = (): DashboardFilters => ({
+  tanggal_awal: formatInputDate(getStartOfMonth(new Date())),
+  tanggal_akhir: formatInputDate(new Date()),
+});
+
+const formatDateLabel = (value: string) =>
+  new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
 
 export default function Dashboard() {
-
-  const [nama, setNama] = useState("");
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [nama, setNama] = useState("User");
+  const [greeting, setGreeting] = useState("Selamat Datang");
+  const [dayPhase, setDayPhase] = useState<DayPhase>("pagi");
+  const [filters, setFilters] = useState<DashboardFilters>({ tanggal_awal: "", tanggal_akhir: "" });
+  const [appliedFilters, setAppliedFilters] = useState<DashboardFilters>({ tanggal_awal: "", tanggal_akhir: "" });
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [cashflowPoints, setCashflowPoints] = useState<CashflowPoint[]>([]);
+  const [salesBreakdown, setSalesBreakdown] = useState<SalesBreakdown[]>([]);
+  const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
+  const [inventory, setInventory] = useState<InventorySummary | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setIsHydrated(true);
 
-    const user = localStorage.getItem("user");
+    const defaultFilters = createDefaultFilters();
+    setFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+
+    const user = window.localStorage.getItem("user");
 
     if (user) {
       try {
@@ -166,305 +149,426 @@ export default function Dashboard() {
       }
     }
 
-  }, []);
-
-  const getGreeting = () => {
-
     const hour = new Date().getHours();
 
-    if (hour >= 5 && hour < 12) return "☀️ Selamat Pagi";
-    if (hour >= 12 && hour < 18) return "🌤️ Selamat Sore";
-    if (hour >= 18 && hour < 22) return "🌙 Selamat Malam";
+    if (hour >= 5 && hour < 12) {
+      setGreeting("Selamat Pagi");
+      setDayPhase("pagi");
+      return;
+    }
 
-    return "😴 Selamat Malam";
+    if (hour >= 12 && hour < 18) {
+      setGreeting("Selamat Siang");
+      setDayPhase("siang");
+      return;
+    }
 
-  };
+    if (hour >= 18 && hour < 22) {
+      setGreeting("Selamat Sore");
+      setDayPhase("sore");
+      return;
+    }
 
+    setGreeting("Selamat Malam");
+    setDayPhase("malam");
+  }, []);
 
+  useEffect(() => {
+    if (!appliedFilters.tanggal_awal || !appliedFilters.tanggal_akhir) return;
+
+    const loadDashboard = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [summaryRes, trendRes, salesRes, expenseRes, inventoryRes] = await Promise.all([
+          api.get("/dashboard/summary", { params: appliedFilters }),
+          api.get("/dashboard/cashflow-trend", { params: appliedFilters }),
+          api.get("/dashboard/penjualan-per-sppg", { params: appliedFilters }),
+          api.get("/dashboard/beban-operasional", { params: appliedFilters }),
+          api.get("/dashboard/persediaan"),
+        ]);
+
+        setSummary(summaryRes.data.data);
+        setCashflowPoints(trendRes.data.data?.points ?? []);
+        setSalesBreakdown(salesRes.data.data?.breakdown ?? []);
+        setExpenseItems(expenseRes.data.data?.items ?? []);
+        setInventory(inventoryRes.data.data);
+      } catch {
+        setError("Dashboard belum berhasil dimuat penuh.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadDashboard();
+  }, [appliedFilters]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (!appliedFilters.tanggal_awal || !appliedFilters.tanggal_akhir) return "-";
+
+    return `${formatDateLabel(appliedFilters.tanggal_awal)} - ${formatDateLabel(
+      appliedFilters.tanggal_akhir
+    )}`;
+  }, [appliedFilters.tanggal_akhir, appliedFilters.tanggal_awal]);
+
+  const totalPendapatanCashflow = cashflowPoints.reduce((sum, item) => sum + item.pendapatan, 0);
+  const totalPemasukanLainCashflow = cashflowPoints.reduce((sum, item) => sum + item.pemasukan_lain, 0);
+  const totalPengeluaranCashflow = cashflowPoints.reduce((sum, item) => sum + item.pengeluaran, 0);
+
+  const greetingIcon = useMemo(() => {
+    switch (dayPhase) {
+      case "pagi":
+        return (
+          <span className="select-none text-4xl leading-none" aria-hidden="true">
+            🌅
+          </span>
+        );
+      case "siang":
+        return (
+          <span className="select-none text-4xl leading-none" aria-hidden="true">
+            ☀️
+          </span>
+        );
+      case "sore":
+        return (
+          <span className="select-none text-4xl leading-none" aria-hidden="true">
+            🌤️
+          </span>
+        );
+      case "malam":
+      default:
+        return (
+          <span className="select-none text-4xl leading-none" aria-hidden="true">
+            🌙
+          </span>
+        );
+    }
+  }, [dayPhase]);
 
   return (
     <div className="flex min-h-screen">
-
-      <main className="flex-1 p-6 space-y-6 bg-white/30 backdrop-blur-2xl rounded-3xl border border-white">
-
-        {/* HEADER */}
-        <div className="flex justify-between items-center">
+      <main className="flex-1 space-y-6 rounded-3xl border border-white bg-white/30 p-6 backdrop-blur-2xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">
-              {getGreeting()}, {nama}
-            </h1>
-
-            <p className="text-sm text-muted-foreground">
-              Ringkasan performa keuangan koperasi
-            </p>
-
+            <div className="flex items-start gap-4">
+              {greetingIcon}
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  {greeting}, {nama}
+                </h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Semoga operasional hari ini berjalan lancar.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <h2 className="text-base text-black">
-            {new Date().toLocaleDateString("id-ID", {
-              timeZone: "Asia/Jakarta",
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}
-          </h2>
-
+          <div className="text-right">
+            <p className="text-base font-medium text-black">{selectedDateLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Rentang Tanggal</p>
+          </div>
         </div>
 
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </div>
+        ) : null}
 
-        {/* KPI */}
-        <div className="grid grid-cols-12 gap-5">
+        <div className="rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-5">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Tanggal Awal</label>
+              <input
+                type="date"
+                value={filters.tanggal_awal}
+                onChange={(e) => setFilters((prev) => ({ ...prev, tanggal_awal: e.target.value }))}
+                className="w-full rounded-md border p-2"
+              />
+            </div>
 
-          {stats.map((item, index) => {
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Tanggal Akhir</label>
+              <input
+                type="date"
+                value={filters.tanggal_akhir}
+                min={filters.tanggal_awal || undefined}
+                onChange={(e) => setFilters((prev) => ({ ...prev, tanggal_akhir: e.target.value }))}
+                className="w-full rounded-md border p-2"
+              />
+            </div>
 
-            const Icon = item.icon
-
-            const bottomRow = index >= 4
-
-            return (
-              <Card
-                key={index}
-                className={`
-rounded-2xl bg-white backdrop-blur-2xl
-col-span-12
-md:col-span-6
-${bottomRow
-                    ? "xl:col-span-4"
-                    : "xl:col-span-3"}
-
-`}
+            <div className="flex items-end gap-2 md:col-span-3">
+              <Button
+                onClick={() => {
+                  if (
+                    filters.tanggal_awal &&
+                    filters.tanggal_akhir &&
+                    filters.tanggal_awal <= filters.tanggal_akhir
+                  ) {
+                    setAppliedFilters(filters);
+                  } else {
+                    setError("Tanggal akhir harus sama atau setelah tanggal awal.");
+                  }
+                }}
+                className="bg-[#7f1d1d] hover:bg-[#6b1616]"
               >
-
-                <CardContent className="p-5">
-
-                  <div className="flex items-start justify-between mb-5">
-
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center ${item.bg}`}
-                    >
-                      <Icon className={`w-5 h-5 ${item.color}`} />
-                    </div>
-
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button>
-                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                        </button>
-                      </DropdownMenuTrigger>
-
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Harian</DropdownMenuItem>
-                        <DropdownMenuItem>Bulanan</DropdownMenuItem>
-                        <DropdownMenuItem>Tahunan</DropdownMenuItem>
-                      </DropdownMenuContent>
-
-                    </DropdownMenu>
-
-                  </div>
-
-
-
-                  <div className="flex justify-between items-center">
-
-                    <div>
-                      <h2 className="text-3xl font-bold">
-                        {item.value}
-                      </h2>
-
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {item.title}
-                      </p>
-
-                    </div>
-
-                    <ProgressCircle
-                      percent={item.percent}
-                      color={item.stroke}
-                    />
-
-                  </div>
-
-                </CardContent>
-              </Card>
-            )
-
-          })}
-
+                Terapkan Filter
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const defaultFilters = createDefaultFilters();
+                  setError("");
+                  setFilters(defaultFilters);
+                  setAppliedFilters(defaultFilters);
+                }}
+              >
+                Reset
+              </Button>
+            </div>
+          </div>
         </div>
 
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="rounded-2xl border bg-white">
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Omset Periode Dipilih</p>
+                <h2 className="mt-2 text-3xl font-bold text-[#2563eb]">
+                  {toRupiah(summary?.omset_periode ?? 0)}
+                </h2>
+              </div>
+              <CircleDollarSign className="h-10 w-10 text-[#2563eb]" />
+            </CardContent>
+          </Card>
 
+          <Card className="rounded-2xl border bg-white">
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Invoice Belum Lunas</p>
+                <h2 className="mt-2 text-3xl font-bold text-[#d97706]">
+                  {toRupiah(summary?.invoice_belum_lunas ?? 0)}
+                </h2>
+              </div>
+              <BadgeDollarSign className="h-10 w-10 text-[#d97706]" />
+            </CardContent>
+          </Card>
 
-        {/* MAIN ANALYTICS */}
+          <Card className="rounded-2xl border bg-white">
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Pengeluaran Periode Dipilih</p>
+                <h2 className="mt-2 text-3xl font-bold text-[#dc2626]">
+                  {toRupiah(summary?.pengeluaran_periode ?? 0)}
+                </h2>
+              </div>
+              <TrendingDown className="h-10 w-10 text-[#dc2626]" />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border bg-white">
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Nilai Stok</p>
+                <h2 className="mt-2 text-3xl font-bold text-[#15803d]">
+                  {toRupiah(summary?.nilai_stok ?? 0)}
+                </h2>
+              </div>
+              <Boxes className="h-10 w-10 text-[#15803d]" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {!isHydrated ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+            Menyiapkan dashboard...
+          </div>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-2">
-
-          {/* Cashflow / Omset Trend */}
-          <Card className="rounded-2xl">
+          <Card className="rounded-2xl border bg-white">
             <CardHeader>
-              <CardTitle>Cashflow & Omset Trend</CardTitle>
+              <CardTitle>Tren Cashflow</CardTitle>
             </CardHeader>
-
             <CardContent>
-              <LineChart />
+              <div className="mb-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl bg-green-50 p-3">
+                  <p className="text-xs text-muted-foreground">Pendapatan</p>
+                  <p className="mt-1 text-sm font-semibold text-green-700">
+                    {toRupiah(totalPendapatanCashflow)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-blue-50 p-3">
+                  <p className="text-xs text-muted-foreground">Pemasukan Lain</p>
+                  <p className="mt-1 text-sm font-semibold text-blue-700">
+                    {toRupiah(totalPemasukanLainCashflow)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-red-50 p-3">
+                  <p className="text-xs text-muted-foreground">Pengeluaran</p>
+                  <p className="mt-1 text-sm font-semibold text-red-700">
+                    {toRupiah(totalPengeluaranCashflow)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={cashflowPoints}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" />
+                    <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                    <Tooltip formatter={(value: number) => toRupiah(Number(value))} />
+                    <Legend />
+                    <Line type="monotone" dataKey="pendapatan" stroke="#15803d" strokeWidth={3} name="Pendapatan" />
+                    <Line type="monotone" dataKey="pemasukan_lain" stroke="#2563eb" strokeWidth={3} name="Pemasukan Lain" />
+                    <Line type="monotone" dataKey="pengeluaran" stroke="#dc2626" strokeWidth={3} name="Pengeluaran" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
           </Card>
 
-
-          {/* Penjualan Per SPPG */}
-          <Card className="rounded-2xl shadow-sm border-0 bg-linear-150 to-green-400 from-lime-600">
+          <Card className="rounded-2xl border-0 bg-gradient-to-br from-lime-600 to-green-400 text-white shadow-sm">
             <CardHeader>
-              <CardTitle className="text-white">Penjualan per SPPG</CardTitle>
+              <CardTitle>Penjualan per SPPG</CardTitle>
             </CardHeader>
-
             <CardContent>
-              <PieChart />
+              <div className="mb-4">
+                <p className="text-sm text-white/90">Total penjualan global</p>
+                <h2 className="mt-1 text-3xl font-bold">
+                  {toRupiah(salesBreakdown.reduce((sum, item) => sum + item.total_penjualan, 0))}
+                </h2>
+              </div>
+
+              <div className="grid items-center gap-4 md:grid-cols-2">
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={salesBreakdown}
+                        dataKey="total_penjualan"
+                        nameKey="nama_sppg"
+                        innerRadius={55}
+                        outerRadius={95}
+                        paddingAngle={4}
+                      >
+                        {salesBreakdown.map((item, index) => (
+                          <Cell key={item.sppg_id} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => toRupiah(Number(value))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="space-y-3">
+                  {salesBreakdown.length ? (
+                    salesBreakdown.map((item, index) => (
+                      <div key={item.sppg_id} className="rounded-xl bg-white/95 p-3 text-slate-900">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="h-3 w-3 rounded-full"
+                              style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                            />
+                            <div>
+                              <p className="font-medium">{item.nama_sppg}</p>
+                              <p className="text-xs text-muted-foreground">{item.persentase}%</p>
+                            </div>
+                          </div>
+                          <p className="font-semibold">{toRupiah(item.total_penjualan)}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl bg-white/95 p-4 text-sm text-slate-600">
+                      Belum ada penjualan selesai pada periode ini.
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardContent>
-
           </Card>
-
         </div>
 
-
-
-
-        {/* SECONDARY */}
         <div className="grid gap-6 lg:grid-cols-4">
-
-          {/* BEBAN */}
-          <Card className="rounded-2xl shadow-sm border-0 lg:col-span-2">
-            <CardHeader className="pb-2">
-              <CardTitle>Beban Operasional Analysis</CardTitle>
+          <Card className="rounded-2xl border bg-white lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Beban Operasional</CardTitle>
             </CardHeader>
-
-            <CardContent className="pt-2">
-              <BarChart />
+            <CardContent>
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={expenseItems}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="nama_operasional" />
+                    <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                    <Tooltip formatter={(value: number) => toRupiah(Number(value))} />
+                    <Legend />
+                    <Bar dataKey="total_pengeluaran" name="Pengeluaran" fill="#7f1d1d" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
-
           </Card>
 
-
-
-          {/* PIUTANG AGING */}
-          <Card className="rounded-2xl bg-white">
-
-            <CardHeader className="pb-2">
-              <CardTitle>Piutang Aging</CardTitle>
+          <Card className="rounded-2xl border bg-white">
+            <CardHeader>
+              <CardTitle>Ringkasan Persediaan</CardTitle>
             </CardHeader>
-
-            <CardContent className="space-y-4 pt-2">
-
-              <div className="rounded-xl bg-muted/50 p-4 flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    0-30 Hari
-                  </p>
-                  <h4 className="font-semibold text-lg">
-                    120 Jt
-                  </h4>
-                </div>
-
-                <span className="text-green-600 text-sm font-medium">
-                  Lancar
-                </span>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-sm text-muted-foreground">Total Qty Stok</p>
+                <h3 className="mt-2 text-2xl font-bold">{toCompactNumber(inventory?.total_qty ?? 0)}</h3>
               </div>
-
-
-
-              <div className="rounded-xl bg-muted/50 p-4 flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    31-60 Hari
-                  </p>
-                  <h4 className="font-semibold text-lg">
-                    48 Jt
-                  </h4>
-                </div>
-
-                <span className="text-yellow-600 text-sm font-medium">
-                  Warning
-                </span>
-
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-sm text-muted-foreground">Total Baris Stok</p>
+                <h3 className="mt-2 text-2xl font-bold">{toCompactNumber(inventory?.total_baris_stok ?? 0)}</h3>
               </div>
-
-
-
-              <div className="rounded-xl bg-muted/50 p-4 flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    61+ Hari
-                  </p>
-                  <h4 className="font-semibold text-lg">
-                    12 Jt
-                  </h4>
-                </div>
-
-                <span className="text-red-600 text-sm font-medium">
-                  Overdue
-                </span>
-
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-sm text-muted-foreground">Gudang Aktif</p>
+                <h3 className="mt-2 text-2xl font-bold">{toCompactNumber(inventory?.gudang_aktif ?? 0)}</h3>
               </div>
-
             </CardContent>
-
           </Card>
 
-
-
-
-          {/* ASSET */}
-          <Card className="rounded-2xl bg-linear-150 from-primary via-blue-700 to-green-400 text-white">
-
-            <CardHeader className="pb-2">
-              <CardTitle>Asset / Persediaan</CardTitle>
+          <Card className="rounded-2xl border bg-white">
+            <CardHeader>
+              <CardTitle>Laba Tanggal Dipilih</CardTitle>
             </CardHeader>
-
-            <CardContent className="space-y-5 pt-2">
-
-              <div className="rounded-xl bg-white p-4">
-                <p className="text-sm text-slate-500">
-                  Total Asset
-                </p>
-
-                <h3 className="text-2xl font-bold text-slate-700 mt-2">
-                  Rp 250.000.000
+            <CardContent className="space-y-4">
+              <div className="rounded-xl bg-emerald-50 p-4">
+                <p className="text-sm text-muted-foreground">Keuntungan Periode Dipilih</p>
+                <h3 className="mt-2 text-2xl font-bold text-emerald-700">
+                  {toRupiah(summary?.keuntungan_periode ?? 0)}
                 </h3>
               </div>
-
-
-              <div className="rounded-xl bg-white p-4">
-                <p className="text-sm text-slate-500">
-                  Jumlah SKU
-                </p>
-
-                <h3 className="text-2xl font-bold text-slate-700 mt-2">
-                  148
+              <div className="rounded-xl bg-orange-50 p-4">
+                <p className="text-sm text-muted-foreground">Piutang Belum Lunas</p>
+                <h3 className="mt-2 text-2xl font-bold text-orange-700">
+                  {toRupiah(summary?.invoice_belum_lunas ?? 0)}
                 </h3>
               </div>
-
-
-              <div className="rounded-xl bg-white p-4">
-                <p className="text-sm text-slate-500">
-                  Dead Stock
-                </p>
-
-                <h3 className="text-2xl font-bold text-slate-700 mt-2">
-                  6 Item
-                </h3>
+              <div className="rounded-xl bg-blue-50 p-4">
+                <p className="text-sm text-muted-foreground">Periode Dipilih</p>
+                <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-blue-700">
+                  <CalendarDays className="h-5 w-5" />
+                  <span>{selectedDateLabel}</span>
+                </div>
               </div>
-
             </CardContent>
-
           </Card>
-
         </div>
 
-
-
-
-
-
+        {loading ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+            Memuat data dashboard...
+          </div>
+        ) : null}
       </main>
     </div>
-  )
-
+  );
 }

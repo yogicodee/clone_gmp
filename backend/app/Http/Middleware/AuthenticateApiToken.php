@@ -26,15 +26,21 @@ class AuthenticateApiToken
             return $this->unauthenticatedResponse();
         }
 
+        if ($user->api_token_expires_at === null || $user->api_token_expires_at->isPast()) {
+            $user->revokeApiToken();
+
+            return $this->unauthenticatedResponse('Token telah kedaluwarsa. Silakan login kembali.');
+        }
+
         $request->setUserResolver(fn (): User => $user);
 
         return $next($request);
     }
 
-    private function unauthenticatedResponse(): JsonResponse
+    private function unauthenticatedResponse(string $message = 'Unauthenticated.'): JsonResponse
     {
         return response()->json([
-            'message' => 'Unauthenticated.',
+            'message' => $message,
         ], 401);
     }
 }

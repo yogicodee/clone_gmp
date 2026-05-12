@@ -101,6 +101,29 @@ const loadImageAsDataUrl = async (imagePath: string) => {
   });
 };
 
+const drawInvoiceCornerOrnaments = (doc: jsPDF) => {
+  doc.setFillColor(226, 89, 70);
+  doc.triangle(126, 0, 210, 0, 210, 29, "F");
+  doc.triangle(0, 255, 0, 297, 37, 297, "F");
+
+  doc.setFillColor(188, 55, 42);
+  doc.triangle(138, 0, 210, 0, 210, 20, "F");
+  doc.triangle(0, 267, 0, 297, 26, 297, "F");
+
+  doc.setFillColor(238, 210, 123);
+  doc.triangle(157, 0, 210, 0, 210, 11, "F");
+  doc.triangle(0, 279, 0, 297, 14, 297, "F");
+
+  doc.setFillColor(242, 242, 242);
+  doc.triangle(140, 6, 210, 27, 210, 33, "F");
+  doc.triangle(0, 248, 7, 297, 18, 297, "F");
+};
+
+const drawInvoicePdfHeader = (doc: jsPDF, headerImage: string) => {
+  drawInvoiceCornerOrnaments(doc);
+  doc.addImage(headerImage, "PNG", 12, 8, 88, 24);
+};
+
 const logUnexpectedError = (error: unknown) => {
   const axiosError = error as AxiosError;
   const status = axiosError.response?.status;
@@ -434,7 +457,7 @@ export default function Page() {
       });
 
       const headerImage = await loadImageAsDataUrl("/invoice-header.png");
-      doc.addImage(headerImage, "PNG", 12, 8, 88, 24);
+      drawInvoicePdfHeader(doc, headerImage);
 
       doc.setFont("times", "bold");
       doc.setFontSize(21);
@@ -444,16 +467,47 @@ export default function Page() {
 
       doc.setFont("times", "normal");
       doc.setFontSize(11);
-      doc.text(`Nomor Invoice: ${detailTarget.nomor_invoice}`, 14, 54);
-      doc.text(`No. PO: ${detailTarget.no_po ?? "-"}`, 14, 61);
-      doc.text(`SPPG: ${detailTarget.sppg ?? "-"}`, 14, 68);
-      doc.text(`Alamat: ${detailTarget.alamat ?? "-"}`, 14, 75);
-      doc.text(`No HP: ${detailTarget.no_hp ?? "-"}`, 14, 82);
-      doc.text(`Tanggal Kirim: ${detailTarget.tanggal_kirim ?? "-"}`, 110, 54);
-      doc.text(`Status: ${formatStatusLabel(detailTarget.status_pembayaran)}`, 110, 61);
+      const infoBoxTop = 51;
+      const infoBoxLeft = 14;
+      const infoBoxWidth = 182;
+      const infoBoxMiddleX = 104;
+      const lineGap = 7;
+      const alamatLines = doc.splitTextToSize(`Alamat: ${detailTarget.alamat ?? "-"}`, 84);
+      const leftLines = [
+        `Nomor Invoice: ${detailTarget.nomor_invoice}`,
+        `No. PO: ${detailTarget.no_po ?? "-"}`,
+        `SPPG: ${detailTarget.sppg ?? "-"}`,
+        ...alamatLines,
+        `No HP: ${detailTarget.no_hp ?? "-"}`,
+      ];
+      const rightLines = [
+        `Tanggal Kirim: ${detailTarget.tanggal_kirim ?? "-"}`,
+        "Cheques Payable To: Koperasi Mitra Pangan Berdikari",
+        "Nama Bank: Bank Tabungan Panin",
+        "No Rekening: 4632027733",
+        "Atas Nama: Koperasi Mitra Pangan Berdikari",
+      ];
+      const infoBoxHeight = Math.max(leftLines.length, rightLines.length) * lineGap + 6;
+      const infoBoxBottom = infoBoxTop + infoBoxHeight;
+      const labelPesananY = infoBoxBottom + 10;
+      const tableStartY = labelPesananY + 4;
+
+      doc.setLineWidth(0.5);
+      doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight);
+      doc.line(infoBoxMiddleX, infoBoxTop, infoBoxMiddleX, infoBoxBottom);
+
+      leftLines.forEach((line, index) => {
+        doc.text(line, infoBoxLeft + 2, infoBoxTop + 8 + index * lineGap);
+      });
+
+      rightLines.forEach((line, index) => {
+        doc.text(line, infoBoxMiddleX + 4, infoBoxTop + 8 + index * lineGap);
+      });
+
+      doc.text("Pesanan :", infoBoxLeft + 2, labelPesananY);
 
       autoTable(doc, {
-        startY: 92,
+        startY: tableStartY,
         theme: "grid",
         styles: {
           font: "times",
@@ -467,6 +521,11 @@ export default function Page() {
           fillColor: [255, 255, 255],
           textColor: [20, 20, 20],
           fontStyle: "bold",
+        },
+        didDrawPage: (data) => {
+          if (data.pageNumber > 1) {
+            drawInvoicePdfHeader(doc, headerImage);
+          }
         },
         columnStyles: {
           0: { halign: "center", cellWidth: 12 },
