@@ -24,8 +24,8 @@ export default function Page() {
     const { data, refetch } = useFetch<Product>("/supplier");
 
     const [listKategori] = useState([
-        "ikan",
-        "sayur",
+        "Basah",
+        "Kering",
     ]);
 
     const [form, setForm] = useState<FormType>({
