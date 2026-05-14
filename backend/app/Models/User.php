@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -73,5 +74,40 @@ class User extends Authenticatable
             'api_token' => null,
             'api_token_expires_at' => null,
         ])->save();
+    }
+
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'user_permissions')
+            ->withTimestamps();
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return $this->normalizedRole() === strtolower(trim($role));
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->normalizedRole() === 'superadmin';
+    }
+
+    public function hasPermission(string $permissionCode): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->permissions()
+            ->where('code', $permissionCode)
+            ->exists();
+    }
+
+    public function normalizedRole(): string
+    {
+        return match (strtolower(trim((string) $this->role))) {
+            'superadmin', 'super_admin' => 'superadmin',
+            default => 'user',
+        };
     }
 }

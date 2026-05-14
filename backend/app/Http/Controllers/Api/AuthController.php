@@ -101,7 +101,8 @@ class AuthController extends Controller
     {
         return match (strtolower(trim($role))) {
             'superadmin', 'super_admin' => 'superadmin',
-            default => 'admin',
+            'user', 'admin' => 'user',
+            default => 'user',
         };
     }
 

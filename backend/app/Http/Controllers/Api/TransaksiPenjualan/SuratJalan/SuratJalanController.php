@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\SuratJalan;
 
 use App\Http\Controllers\Controller;
+use App\Models\MasterData\Karyawan;
 use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\SuratJalan;
@@ -10,7 +11,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SuratJalanController extends Controller
 {
@@ -113,7 +116,7 @@ class SuratJalanController extends Controller
 
     private function validatePayload(Request $request, ?SuratJalan $suratJalan = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nomor_surat_jalan' => [
                 'required',
                 'string',
@@ -127,6 +130,20 @@ class SuratJalanController extends Controller
             'driver_id' => ['nullable', 'integer', 'exists:karyawan,id'],
             'status' => ['required', Rule::in(['draft', 'selesai', 'batal'])],
         ]);
+
+        if ($payload['driver_id'] !== null) {
+            $driver = Karyawan::query()->findOrFail($payload['driver_id']);
+            $jabatan = Str::lower($driver->jabatan ?? '');
+            $status = Str::lower($driver->status ?? '');
+
+            if (! Str::contains($jabatan, 'driver') || $status !== 'aktif') {
+                throw ValidationException::withMessages([
+                    'driver_id' => 'Driver yang dipilih harus karyawan aktif dengan jabatan Driver.',
+                ]);
+            }
+        }
+
+        return $payload;
     }
 
     private function syncItemsFromPenjualan(SuratJalan $suratJalan): void

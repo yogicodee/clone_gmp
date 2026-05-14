@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             'super_admin'
         );
 
+        $this->call(PermissionSeeder::class);
         $this->call(DashboardSummarySeeder::class);
         $this->call(DashboardSalesBySppgSeeder::class);
         $this->call(LaporanStokBarangSeeder::class);

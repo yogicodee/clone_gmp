@@ -2,6 +2,9 @@
 
 namespace App\Models\TransaksiPenjualan;
 
+use App\Models\MasterData\BankRekening;
+use App\Models\MasterData\Karyawan;
+use App\Models\MasterData\Perusahaan;
 use App\Models\MasterData\Sppg;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +20,9 @@ class InvoicePenjualan extends Model
         'nomor_invoice',
         'penjualan_id',
         'sppg_id',
+        'accounting_id',
+        'bank_rekening_id',
+        'perusahaan_id',
         'tanggal_invoice',
         'total_tagihan',
         'status_pembayaran',
@@ -40,6 +46,21 @@ class InvoicePenjualan extends Model
     public function sppg(): BelongsTo
     {
         return $this->belongsTo(Sppg::class, 'sppg_id');
+    }
+
+    public function accounting(): BelongsTo
+    {
+        return $this->belongsTo(Karyawan::class, 'accounting_id');
+    }
+
+    public function bankRekening(): BelongsTo
+    {
+        return $this->belongsTo(BankRekening::class, 'bank_rekening_id');
+    }
+
+    public function perusahaan(): BelongsTo
+    {
+        return $this->belongsTo(Perusahaan::class, 'perusahaan_id');
     }
 
     public function getKodePenjualanAttribute(): ?string

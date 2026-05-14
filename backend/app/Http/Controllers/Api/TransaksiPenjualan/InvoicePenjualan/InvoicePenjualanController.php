@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\InvoicePenjualan;
 
 use App\Http\Controllers\Controller;
+use App\Models\MasterData\BankRekening;
+use App\Models\MasterData\Karyawan;
+use App\Models\MasterData\Perusahaan;
 use App\Models\MasterData\Sppg;
 use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\InvoicePenjualan;
@@ -12,6 +15,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -32,7 +36,13 @@ class InvoicePenjualanController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $records = InvoicePenjualan::query()
-            ->with(['penjualan:id,kode_penjualan,tanggal', 'sppg:id,nama_sppg,alamat,no_penanggungjawab'])
+            ->with([
+                'penjualan:id,kode_penjualan,tanggal',
+                'sppg:id,nama_sppg,alamat,no_penanggungjawab',
+                'accounting:id,nama,jabatan,status',
+                'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
+                'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+            ])
             ->when($search, function ($query, string $keyword): void {
                 $query->where(function ($subQuery) use ($keyword): void {
                     $subQuery
@@ -103,6 +113,52 @@ class InvoicePenjualanController extends Controller
         ]);
     }
 
+    public function opsiAccounting(): JsonResponse
+    {
+        $options = Karyawan::query()
+            ->where('jabatan', 'like', '%Accounting%')
+            ->whereIn('status', ['aktif', 'Aktif'])
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'jabatan', 'status'])
+            ->map(fn (Karyawan $karyawan): array => [
+                'id' => $karyawan->id,
+                'nama' => $karyawan->nama,
+                'jabatan' => $karyawan->jabatan,
+                'status' => $karyawan->status === 'nonaktif' ? 'non aktif' : $karyawan->status,
+            ])
+            ->values();
+
+        return response()->json([
+            'message' => 'Opsi accounting invoice berhasil diambil.',
+            'data' => $options,
+        ]);
+    }
+
+    public function opsiBankRekening(): JsonResponse
+    {
+        $options = BankRekening::query()
+            ->orderBy('nama_bank')
+            ->orderBy('atas_nama')
+            ->get(['id', 'nama_bank', 'no_rek', 'atas_nama', 'cabang']);
+
+        return response()->json([
+            'message' => 'Opsi bank dan rekening invoice berhasil diambil.',
+            'data' => $options,
+        ]);
+    }
+
+    public function opsiPerusahaan(): JsonResponse
+    {
+        $options = Perusahaan::query()
+            ->orderBy('nama_perusahaan')
+            ->get(['id', 'nama_perusahaan', 'alamat', 'nama_pic']);
+
+        return response()->json([
+            'message' => 'Opsi perusahaan invoice berhasil diambil.',
+            'data' => $options,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $payload = $this->validatePayload($request);
@@ -111,7 +167,13 @@ class InvoicePenjualanController extends Controller
         return response()->json([
             'message' => 'Invoice penjualan berhasil ditambahkan.',
             'data' => $this->serializeInvoice(
-                $record->fresh(['penjualan:id,kode_penjualan,tanggal', 'sppg:id,nama_sppg,alamat,no_penanggungjawab'])
+                $record->fresh([
+                    'penjualan:id,kode_penjualan,tanggal',
+                    'sppg:id,nama_sppg,alamat,no_penanggungjawab',
+                    'accounting:id,nama,jabatan,status',
+                    'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
+                    'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+                ])
             ),
         ], 201);
     }
@@ -121,6 +183,9 @@ class InvoicePenjualanController extends Controller
         $invoicePenjualan->load([
             'penjualan:id,kode_penjualan,tanggal,total_harga,status',
             'sppg:id,nama_sppg,alamat,no_penanggungjawab',
+            'accounting:id,nama,jabatan,status',
+            'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
+            'perusahaan:id,nama_perusahaan,alamat,nama_pic',
         ]);
 
         return response()->json([
@@ -137,7 +202,13 @@ class InvoicePenjualanController extends Controller
         return response()->json([
             'message' => 'Invoice penjualan berhasil diperbarui.',
             'data' => $this->serializeInvoice(
-                $invoicePenjualan->fresh(['penjualan:id,kode_penjualan,tanggal', 'sppg:id,nama_sppg,alamat,no_penanggungjawab'])
+                $invoicePenjualan->fresh([
+                    'penjualan:id,kode_penjualan,tanggal',
+                    'sppg:id,nama_sppg,alamat,no_penanggungjawab',
+                    'accounting:id,nama,jabatan,status',
+                    'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
+                    'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+                ])
             ),
         ]);
     }
@@ -162,6 +233,9 @@ class InvoicePenjualanController extends Controller
             ],
             'tanggal_kirim' => ['required', 'date'],
             'sppg_id' => ['required', 'integer', 'exists:sppg,id'],
+            'accounting_id' => ['required', 'integer', 'exists:karyawan,id'],
+            'bank_rekening_id' => ['required', 'integer', 'exists:bank_rekening,id'],
+            'perusahaan_id' => ['required', 'integer', 'exists:perusahaan,id'],
             'tanggal_invoice' => ['required', 'date'],
             'status_pembayaran' => ['required', Rule::in(['lunas', 'belum lunas'])],
         ]);
@@ -210,10 +284,26 @@ class InvoicePenjualanController extends Controller
             ]);
         }
 
+        $accounting = Karyawan::query()->findOrFail($payload['accounting_id']);
+        $jabatan = Str::lower($accounting->jabatan ?? '');
+        $status = Str::lower($accounting->status ?? '');
+
+        if (! Str::contains($jabatan, 'accounting') || $status !== 'aktif') {
+            throw ValidationException::withMessages([
+                'accounting_id' => 'Accounting yang dipilih harus karyawan aktif dengan jabatan Accounting.',
+            ]);
+        }
+
+        BankRekening::query()->findOrFail($payload['bank_rekening_id']);
+        Perusahaan::query()->findOrFail($payload['perusahaan_id']);
+
         return [
             'nomor_invoice' => $payload['nomor_invoice'],
             'penjualan_id' => $representativePenjualan->id,
             'sppg_id' => $payload['sppg_id'],
+            'accounting_id' => $payload['accounting_id'],
+            'bank_rekening_id' => $payload['bank_rekening_id'],
+            'perusahaan_id' => $payload['perusahaan_id'],
             'tanggal_invoice' => $payload['tanggal_invoice'],
             'total_tagihan' => $penjualanRecords->sum(
                 fn (Penjualan $penjualan): float => (float) $penjualan->total_harga
@@ -249,6 +339,15 @@ class InvoicePenjualanController extends Controller
             'penjualan_id' => $invoicePenjualan->penjualan_id,
             'no_po' => $noPo,
             'sppg_id' => $invoicePenjualan->sppg_id,
+            'accounting_id' => $invoicePenjualan->accounting_id,
+            'accounting' => $invoicePenjualan->accounting?->nama,
+            'bank_rekening_id' => $invoicePenjualan->bank_rekening_id,
+            'nama_bank' => $invoicePenjualan->bankRekening?->nama_bank,
+            'no_rek' => $invoicePenjualan->bankRekening?->no_rek,
+            'atas_nama_bank' => $invoicePenjualan->bankRekening?->atas_nama,
+            'cabang_bank' => $invoicePenjualan->bankRekening?->cabang,
+            'perusahaan_id' => $invoicePenjualan->perusahaan_id,
+            'perusahaan' => $invoicePenjualan->perusahaan?->nama_perusahaan,
             'sppg' => $sppg?->nama_sppg,
             'alamat' => $sppg?->alamat,
             'no_hp' => $sppg?->no_penanggungjawab,

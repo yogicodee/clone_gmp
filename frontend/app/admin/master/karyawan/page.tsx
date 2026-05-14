@@ -40,6 +40,7 @@ export default function Page() {
         "Admin",
         "Accounting",
         "Warehouse",
+        "Driver",
     ]);
 
     const [editId, setEditId] = useState<number | null>(null);

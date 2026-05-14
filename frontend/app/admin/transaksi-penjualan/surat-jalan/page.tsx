@@ -23,6 +23,8 @@ type ArmadaOption = {
 type DriverOption = {
     id: number;
     nama: string;
+    jabatan?: string;
+    status?: string;
 };
 
 type SuratJalan = {
@@ -78,7 +80,7 @@ export default function Page() {
     const { data, refetch } = useFetch<SuratJalan>("/surat-jalan");
     const { data: sppgData } = useFetch<SppgOption>("/sppg");
     const { data: armadaData } = useFetch<ArmadaOption>("/armada");
-    const { data: driverData } = useFetch<DriverOption>("/karyawan");
+    const { data: driverData } = useFetch<DriverOption>("/karyawan?search=driver&per_page=100");
 
     const [form, setForm] = useState<FormType>(initialForm);
     const [editTarget, setEditTarget] = useState<SuratJalan | null>(null);
@@ -257,6 +259,14 @@ export default function Page() {
     );
 
     const selectedArmada = armadaData.find((item) => item.id === form.armada_id) ?? null;
+    const filteredDriverData = useMemo(
+        () =>
+            driverData.filter((item) =>
+                item.jabatan?.toLowerCase().includes("driver") &&
+                item.status?.toLowerCase() === "aktif"
+            ),
+        [driverData]
+    );
 
     return (
         <div className="p-6 space-y-6">
@@ -485,7 +495,7 @@ export default function Page() {
                                 className="w-full border p-2 rounded-md"
                             >
                                 <option value="">Pilih Driver</option>
-                                {driverData.map((item) => (
+                                {filteredDriverData.map((item) => (
                                     <option key={item.id} value={item.id}>
                                         {item.nama}
                                     </option>

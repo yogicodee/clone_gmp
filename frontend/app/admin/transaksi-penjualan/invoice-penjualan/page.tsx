@@ -25,6 +25,15 @@ type InvoiceRecord = {
   penjualan_id: number;
   no_po: string | null;
   sppg_id: number;
+  accounting_id: number | null;
+  accounting: string | null;
+  bank_rekening_id: number | null;
+  nama_bank: string | null;
+  no_rek: string | null;
+  atas_nama_bank: string | null;
+  cabang_bank: string | null;
+  perusahaan_id: number | null;
+  perusahaan: string | null;
   sppg: string | null;
   alamat: string | null;
   no_hp: string | null;
@@ -43,10 +52,35 @@ type SppgOption = {
   no_hp: string | null;
 };
 
+type AccountingOption = {
+  id: number;
+  nama: string;
+  jabatan: string;
+  status: string;
+};
+
+type BankRekeningOption = {
+  id: number;
+  nama_bank: string;
+  no_rek: string;
+  atas_nama: string;
+  cabang: string;
+};
+
+type PerusahaanOption = {
+  id: number;
+  nama_perusahaan: string;
+  alamat: string;
+  nama_pic: string;
+};
+
 type FormType = {
   nomor_invoice: string;
   tanggal_kirim: string;
   sppg_id: string;
+  accounting_id: string;
+  bank_rekening_id: string;
+  perusahaan_id: string;
   no_po: string;
   alamat: string;
   no_hp: string;
@@ -65,6 +99,9 @@ const emptyForm: FormType = {
   nomor_invoice: "",
   tanggal_kirim: "",
   sppg_id: "",
+  accounting_id: "",
+  bank_rekening_id: "",
+  perusahaan_id: "",
   no_po: "",
   alamat: "",
   no_hp: "",
@@ -149,6 +186,9 @@ export default function Page() {
 
   const [form, setForm] = useState<FormType>(emptyForm);
   const [sppgOptions, setSppgOptions] = useState<SppgOption[]>([]);
+  const [accountingOptions, setAccountingOptions] = useState<AccountingOption[]>([]);
+  const [bankRekeningOptions, setBankRekeningOptions] = useState<BankRekeningOption[]>([]);
+  const [perusahaanOptions, setPerusahaanOptions] = useState<PerusahaanOption[]>([]);
   const [optionLoading, setOptionLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormType, string>>>({});
 
@@ -215,6 +255,49 @@ export default function Page() {
 
     return undefined;
   }, [successMessage, errorMessage]);
+
+  const fetchAccountingOptions = useCallback(async () => {
+    try {
+      const response = await api.get("/invoice-penjualan/opsi-accounting");
+      setAccountingOptions(response.data.data ?? []);
+    } catch (error) {
+      logUnexpectedError(error);
+      setAccountingOptions([]);
+      setErrorMessage("Pilihan accounting gagal dimuat.");
+    }
+  }, []);
+
+  const fetchBankRekeningOptions = useCallback(async () => {
+    try {
+      const response = await api.get("/invoice-penjualan/opsi-bank-rekening");
+      setBankRekeningOptions(response.data.data ?? []);
+    } catch (error) {
+      logUnexpectedError(error);
+      setBankRekeningOptions([]);
+      setErrorMessage("Pilihan bank dan rekening gagal dimuat.");
+    }
+  }, []);
+
+  const fetchPerusahaanOptions = useCallback(async () => {
+    try {
+      const response = await api.get("/invoice-penjualan/opsi-perusahaan");
+      setPerusahaanOptions(response.data.data ?? []);
+    } catch (error) {
+      logUnexpectedError(error);
+      setPerusahaanOptions([]);
+      setErrorMessage("Pilihan perusahaan gagal dimuat.");
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetchAccountingOptions();
+      void fetchBankRekeningOptions();
+      void fetchPerusahaanOptions();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [fetchAccountingOptions, fetchBankRekeningOptions, fetchPerusahaanOptions]);
 
   const sortedData = useMemo(() => {
     const rows = [...data];
@@ -324,6 +407,9 @@ export default function Page() {
     if (!form.nomor_invoice.trim()) nextErrors.nomor_invoice = "Nomor invoice wajib diisi.";
     if (!form.tanggal_kirim) nextErrors.tanggal_kirim = "Tanggal kirim wajib diisi.";
     if (!form.sppg_id) nextErrors.sppg_id = "SPPG wajib dipilih.";
+    if (!form.accounting_id) nextErrors.accounting_id = "Accounting wajib dipilih.";
+    if (!form.bank_rekening_id) nextErrors.bank_rekening_id = "Bank dan rekening wajib dipilih.";
+    if (!form.perusahaan_id) nextErrors.perusahaan_id = "Perusahaan wajib dipilih.";
     if (!form.tanggal_invoice) nextErrors.tanggal_invoice = "Tanggal invoice wajib diisi.";
 
     setFieldErrors(nextErrors);
@@ -340,6 +426,9 @@ export default function Page() {
         nomor_invoice: form.nomor_invoice,
         tanggal_kirim: form.tanggal_kirim,
         sppg_id: Number(form.sppg_id),
+        accounting_id: Number(form.accounting_id),
+        bank_rekening_id: Number(form.bank_rekening_id),
+        perusahaan_id: Number(form.perusahaan_id),
         tanggal_invoice: form.tanggal_invoice,
         status_pembayaran: form.status_pembayaran,
       };
@@ -363,6 +452,9 @@ export default function Page() {
           nomor_invoice: responseErrors.nomor_invoice?.[0],
           tanggal_kirim: responseErrors.tanggal_kirim?.[0],
           sppg_id: responseErrors.sppg_id?.[0],
+          accounting_id: responseErrors.accounting_id?.[0],
+          bank_rekening_id: responseErrors.bank_rekening_id?.[0],
+          perusahaan_id: responseErrors.perusahaan_id?.[0],
           tanggal_invoice: responseErrors.tanggal_invoice?.[0],
           status_pembayaran: responseErrors.status_pembayaran?.[0],
         });
@@ -381,6 +473,9 @@ export default function Page() {
       nomor_invoice: item.nomor_invoice,
       tanggal_kirim: item.tanggal_kirim ?? "",
       sppg_id: item.sppg_id ? String(item.sppg_id) : "",
+      accounting_id: item.accounting_id ? String(item.accounting_id) : "",
+      bank_rekening_id: item.bank_rekening_id ? String(item.bank_rekening_id) : "",
+      perusahaan_id: item.perusahaan_id ? String(item.perusahaan_id) : "",
       no_po: item.no_po ?? "",
       alamat: item.alamat ?? "",
       no_hp: item.no_hp ?? "",
@@ -435,21 +530,6 @@ export default function Page() {
     if (!detailTarget) return;
 
     try {
-      const karyawanResponse = await api.get("/karyawan", {
-        params: {
-          search: "Accounting",
-          per_page: 100,
-          sort_field: "nama",
-          sort_order: "asc",
-        },
-      });
-
-      const accountingStaff = (karyawanResponse.data.data ?? []).find(
-        (karyawan: { jabatan?: string; status?: string }) =>
-          karyawan.jabatan?.toLowerCase().includes("accounting")
-          && karyawan.status?.toLowerCase() === "aktif"
-      );
-
       const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -482,29 +562,31 @@ export default function Page() {
       ];
       const rightLines = [
         `Tanggal Kirim: ${detailTarget.tanggal_kirim ?? "-"}`,
-        "Cheques Payable To: Koperasi Mitra Pangan Berdikari",
-        "Nama Bank: Bank Tabungan Panin",
-        "No Rekening: 4632027733",
-        "Atas Nama: Koperasi Mitra Pangan Berdikari",
+        `Cheques Payable To: ${detailTarget.perusahaan ?? "-"}`,
+        `Nama Bank: ${detailTarget.nama_bank ?? "-"}`,
+        `No Rekening: ${detailTarget.no_rek ?? "-"}`,
+        `Atas Nama: ${detailTarget.atas_nama_bank ?? "-"}`,
       ];
       const infoBoxHeight = Math.max(leftLines.length, rightLines.length) * lineGap + 6;
-      const infoBoxBottom = infoBoxTop + infoBoxHeight;
-      const labelPesananY = infoBoxBottom + 10;
-      const tableStartY = labelPesananY + 4;
+        const infoBoxBottom = infoBoxTop + infoBoxHeight;
+        const labelPesananY = infoBoxBottom + 10;
+        const tableStartY = labelPesananY + 4;
 
-      doc.setLineWidth(0.5);
-      doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight);
-      doc.line(infoBoxMiddleX, infoBoxTop, infoBoxMiddleX, infoBoxBottom);
+        doc.setLineWidth(0.5);
+        doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight);
+        doc.line(infoBoxMiddleX, infoBoxTop, infoBoxMiddleX, infoBoxBottom);
+        doc.setFont("times", "normal");
+        doc.setFontSize(11);
 
-      leftLines.forEach((line, index) => {
-        doc.text(line, infoBoxLeft + 2, infoBoxTop + 8 + index * lineGap);
-      });
+        leftLines.forEach((line, index) => {
+          doc.text(line, infoBoxLeft + 2, infoBoxTop + 8 + index * lineGap);
+        });
 
-      rightLines.forEach((line, index) => {
-        doc.text(line, infoBoxMiddleX + 4, infoBoxTop + 8 + index * lineGap);
-      });
+        rightLines.forEach((line, index) => {
+          doc.text(line, infoBoxMiddleX + 4, infoBoxTop + 8 + index * lineGap);
+        });
 
-      doc.text("Pesanan :", infoBoxLeft + 2, labelPesananY);
+        doc.text("Pesanan :", infoBoxLeft + 2, labelPesananY);
 
       autoTable(doc, {
         startY: tableStartY,
@@ -560,7 +642,7 @@ export default function Page() {
       doc.setFontSize(11);
       doc.text(`Jombang, ${formatTanggalIndonesiaPanjang(detailTarget.tanggal_invoice)}`, 150, footerY, { align: "center" });
       doc.text("Accounting Koperasi", 150, footerY + 8, { align: "center" });
-      doc.text(`(${accountingStaff?.nama ?? ""})`, 150, footerY + 34, { align: "center" });
+      doc.text(`(${detailTarget.accounting ?? ""})`, 150, footerY + 34, { align: "center" });
 
       doc.save(`${detailTarget.nomor_invoice}.pdf`);
     } catch (error) {
@@ -805,6 +887,60 @@ export default function Page() {
                 ) : null}
               </div>
 
+              <div className="space-y-1">
+                <select
+                  value={form.accounting_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, accounting_id: e.target.value }))}
+                  className={`w-full border p-2 rounded-md ${fieldErrors.accounting_id ? "border-red-400" : ""}`}
+                >
+                  <option value="">Pilih Accounting</option>
+                  {accountingOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.nama}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.accounting_id ? (
+                  <p className="text-sm text-red-600">{fieldErrors.accounting_id}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <select
+                  value={form.bank_rekening_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, bank_rekening_id: e.target.value }))}
+                  className={`w-full border p-2 rounded-md ${fieldErrors.bank_rekening_id ? "border-red-400" : ""}`}
+                >
+                  <option value="">Pilih Bank & Rekening</option>
+                  {bankRekeningOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.nama_bank} - {option.no_rek} - {option.atas_nama}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.bank_rekening_id ? (
+                  <p className="text-sm text-red-600">{fieldErrors.bank_rekening_id}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <select
+                  value={form.perusahaan_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, perusahaan_id: e.target.value }))}
+                  className={`w-full border p-2 rounded-md ${fieldErrors.perusahaan_id ? "border-red-400" : ""}`}
+                >
+                  <option value="">Pilih Perusahaan</option>
+                  {perusahaanOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.nama_perusahaan}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.perusahaan_id ? (
+                  <p className="text-sm text-red-600">{fieldErrors.perusahaan_id}</p>
+                ) : null}
+              </div>
+
               <input
                 value={form.no_po}
                 readOnly
@@ -938,6 +1074,26 @@ export default function Page() {
                 <div>
                   <p className="text-gray-500">Status</p>
                   <p>{formatStatusLabel(detailTarget.status_pembayaran)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Accounting</p>
+                  <p>{detailTarget.accounting ?? "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Bank</p>
+                  <p>{detailTarget.nama_bank ?? "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">No Rekening</p>
+                  <p>{detailTarget.no_rek ?? "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Atas Nama Rekening</p>
+                  <p>{detailTarget.atas_nama_bank ?? "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Perusahaan</p>
+                  <p>{detailTarget.perusahaan ?? "-"}</p>
                 </div>
               </div>
 
