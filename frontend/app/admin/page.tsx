@@ -16,7 +16,10 @@ import {
   BadgeDollarSign,
   Boxes,
   CalendarDays,
+  CloudSun,
   CircleDollarSign,
+  MoonStar,
+  Sun,
   TrendingDown,
 } from "lucide-react";
 import {
@@ -115,6 +118,17 @@ const formatDateLabel = (value: string) =>
     month: "long",
     year: "numeric",
   }).format(new Date(value));
+
+function MorningGreetingIcon() {
+  return (
+    <span
+      className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 via-amber-300 to-sky-400 shadow-sm"
+      aria-hidden="true"
+    >
+      <CloudSun className="h-9 w-9 text-white drop-shadow-sm" strokeWidth={2.25} />
+    </span>
+  );
+}
 
 export default function Dashboard() {
   const [isHydrated, setIsHydrated] = useState(false);
@@ -219,28 +233,24 @@ export default function Dashboard() {
   const greetingIcon = useMemo(() => {
     switch (dayPhase) {
       case "pagi":
-        return (
-          <span className="select-none text-4xl leading-none" aria-hidden="true">
-            🌅
-          </span>
-        );
+        return <MorningGreetingIcon />;
       case "siang":
         return (
           <span className="select-none text-4xl leading-none" aria-hidden="true">
-            ☀️
+            <Sun className="h-10 w-10 text-amber-500" strokeWidth={2.25} />
           </span>
         );
       case "sore":
         return (
           <span className="select-none text-4xl leading-none" aria-hidden="true">
-            🌤️
+            <CloudSun className="h-10 w-10 text-sky-500" strokeWidth={2.25} />
           </span>
         );
       case "malam":
       default:
         return (
           <span className="select-none text-4xl leading-none" aria-hidden="true">
-            🌙
+            <MoonStar className="h-10 w-10 text-indigo-500" strokeWidth={2.25} />
           </span>
         );
     }
