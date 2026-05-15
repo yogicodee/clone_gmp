@@ -412,8 +412,8 @@ export default function Page() {
                                             {item.status_stok === "berhasil" ? "Berhasil" : "Pending"}
                                         </span>
                                     </td>
-                                    <td className="p-3">Rp {formatCurrency(Number(item.harga_satuan))}</td>
-                                    <td className="p-3">Rp {formatCurrency(Number(item.total_harga))}</td>
+                                    <td className="p-3"> {formatCurrency(Number(item.harga_satuan))}</td>
+                                    <td className="p-3"> {formatCurrency(Number(item.total_harga))}</td>
                                     <td className="p-3 flex justify-center gap-2">
                                         <button
                                             onClick={() => handleEdit(item)}
