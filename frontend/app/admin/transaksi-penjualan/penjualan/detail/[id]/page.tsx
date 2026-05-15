@@ -374,7 +374,7 @@ export default function Page() {
                             </th>
                             <th className="p-3 text-left">Satuan</th>
                             <th className="p-3 text-left">Stok</th>
-                            <th className="p-3 text-left">Status Stok</th>
+                            <th className="p-3 text-left">Status</th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("harga_satuan")} className="flex items-center gap-2">
                                     Harga <ArrowUpDown size={14} />
