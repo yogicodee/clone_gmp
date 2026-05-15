@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\PenjualanItem;
+use App\Models\WarehouseSystem\WarehouseStokBasah;
+use App\Models\WarehouseSystem\WarehouseStokKering;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -28,7 +30,9 @@ class PenjualanItemController extends Controller
                 $query->where('nama_barang', 'like', '%'.$keyword.'%');
             })
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->map(fn (PenjualanItem $item): array => $this->serializeItem($item))
+            ->values();
 
         if ($items->isEmpty() && $penjualan->order_penawaran_id !== null) {
             $items = OrderPenawaranItem::query()
@@ -52,6 +56,15 @@ class PenjualanItemController extends Controller
                         'harga_satuan' => $item->harga_satuan,
                         'total_harga' => number_format((float) $item->qty * (float) $item->harga_satuan, 2, '.', ''),
                         'keterangan' => $item->keterangan,
+                        'stok_tersedia' => number_format(
+                            $this->resolveAvailableStock($item->nama_barang, null),
+                            2,
+                            '.',
+                            ''
+                        ),
+                        'status_stok' => $this->resolveAvailableStock($item->nama_barang, null) >= (float) $item->qty
+                            ? 'berhasil'
+                            : 'pending',
                     ];
                 })
                 ->values();
@@ -76,7 +89,7 @@ class PenjualanItemController extends Controller
 
         return response()->json([
             'message' => 'Item penjualan berhasil ditambahkan.',
-            'data' => $item->load('gudang'),
+            'data' => $this->serializeItem($item->load('gudang')),
         ], 201);
     }
 
@@ -86,7 +99,7 @@ class PenjualanItemController extends Controller
 
         return response()->json([
             'message' => 'Detail item penjualan berhasil diambil.',
-            'data' => $item->load('gudang'),
+            'data' => $this->serializeItem($item->load('gudang')),
         ]);
     }
 
@@ -104,7 +117,7 @@ class PenjualanItemController extends Controller
 
         return response()->json([
             'message' => 'Item penjualan berhasil diperbarui.',
-            'data' => $item->load('gudang'),
+            'data' => $this->serializeItem($item->load('gudang')),
         ]);
     }
 
@@ -224,5 +237,48 @@ class PenjualanItemController extends Controller
     private function ensureItemBelongsToPenjualan(Penjualan $penjualan, PenjualanItem $item): void
     {
         abort_if($item->penjualan_id !== $penjualan->id, 404);
+    }
+
+    private function serializeItem(PenjualanItem $item): array
+    {
+        $stokTersedia = $this->resolveAvailableStock($item->nama_barang, $item->gudang_id);
+
+        return [
+            'id' => $item->id,
+            'penjualan_id' => $item->penjualan_id,
+            'order_penawaran_item_id' => $item->order_penawaran_item_id,
+            'produk_id' => $item->produk_id,
+            'gudang_id' => $item->gudang_id,
+            'gudang' => $item->gudang
+                ? [
+                    'id' => $item->gudang->id,
+                    'nama_gudang' => $item->gudang->nama_gudang,
+                ]
+                : null,
+            'nama_barang' => $item->nama_barang,
+            'qty' => number_format((float) $item->qty, 2, '.', ''),
+            'satuan' => $item->satuan,
+            'harga_satuan' => number_format((float) $item->harga_satuan, 2, '.', ''),
+            'total_harga' => number_format((float) $item->total_harga, 2, '.', ''),
+            'stok_tersedia' => number_format($stokTersedia, 2, '.', ''),
+            'status_stok' => $stokTersedia >= (float) $item->qty ? 'berhasil' : 'pending',
+        ];
+    }
+
+    private function resolveAvailableStock(string $namaBarang, ?int $gudangId): float
+    {
+        $normalizedName = mb_strtolower(trim($namaBarang));
+
+        $stokBasah = WarehouseStokBasah::query()
+            ->when($gudangId !== null, fn ($query) => $query->where('gudang_id', $gudangId))
+            ->whereRaw('LOWER(TRIM(nama_barang)) = ?', [$normalizedName])
+            ->sum('qty');
+
+        $stokKering = WarehouseStokKering::query()
+            ->when($gudangId !== null, fn ($query) => $query->where('gudang_id', $gudangId))
+            ->whereRaw('LOWER(TRIM(nama_barang)) = ?', [$normalizedName])
+            ->sum('qty');
+
+        return (float) $stokBasah + (float) $stokKering;
     }
 }

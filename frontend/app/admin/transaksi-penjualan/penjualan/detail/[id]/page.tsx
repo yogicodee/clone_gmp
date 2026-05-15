@@ -43,6 +43,8 @@ type PenjualanItem = {
     harga_satuan: number | string;
     total_harga: number | string;
     keterangan?: string | null;
+    stok_tersedia: number | string;
+    status_stok: "berhasil" | "pending";
 };
 
 type OpsiBarang = {
@@ -371,6 +373,8 @@ export default function Page() {
                                 </button>
                             </th>
                             <th className="p-3 text-left">Satuan</th>
+                            <th className="p-3 text-left">Stok</th>
+                            <th className="p-3 text-left">Status Stok</th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("harga_satuan")} className="flex items-center gap-2">
                                     Harga <ArrowUpDown size={14} />
@@ -384,7 +388,7 @@ export default function Page() {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                <td colSpan={10} className="p-6 text-center text-gray-500">
                                     Memuat data...
                                 </td>
                             </tr>
@@ -396,6 +400,18 @@ export default function Page() {
                                     <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
                                     <td className="p-3">{Number(item.qty)}</td>
                                     <td className="p-3">{item.satuan}</td>
+                                    <td className="p-3">{Number(item.stok_tersedia)}</td>
+                                    <td className="p-3">
+                                        <span
+                                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                                item.status_stok === "berhasil"
+                                                    ? "bg-green-100 text-green-700"
+                                                    : "bg-amber-100 text-amber-700"
+                                            }`}
+                                        >
+                                            {item.status_stok === "berhasil" ? "Berhasil" : "Pending"}
+                                        </span>
+                                    </td>
                                     <td className="p-3">Rp {formatCurrency(Number(item.harga_satuan))}</td>
                                     <td className="p-3">Rp {formatCurrency(Number(item.total_harga))}</td>
                                     <td className="p-3 flex justify-center gap-2">
@@ -423,7 +439,7 @@ export default function Page() {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center text-gray-500">
+                                <td colSpan={10} className="p-6 text-center text-gray-500">
                                     Belum ada item penjualan.
                                 </td>
                             </tr>

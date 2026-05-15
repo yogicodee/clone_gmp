@@ -5,12 +5,36 @@ namespace Tests\Feature;
 use App\Models\MasterData\Gudang;
 use App\Models\TransaksiPembelian\OrderPenawaran;
 use App\Models\TransaksiPenjualan\Penjualan;
+use App\Models\User;
+use App\Models\WarehouseSystem\WarehouseStokBasah;
+use App\Models\WarehouseSystem\WarehouseStokKering;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class PenjualanItemApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** @var array<string, string> */
+    private array $headers;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $user = User::query()->create([
+            'nama' => 'Super Admin Demo',
+            'name' => 'Super Admin Demo',
+            'email' => 'superadmin.demo@gmp.local',
+            'password' => 'rahasia123',
+            'role' => 'super_admin',
+        ]);
+
+        $this->headers = [
+            'Authorization' => 'Bearer '.$user->issueApiToken(),
+            'Accept' => 'application/json',
+        ];
+    }
 
     public function test_opsi_barang_only_returns_items_with_same_shipping_date(): void
     {
@@ -52,7 +76,7 @@ class PenjualanItemApiTest extends TestCase
             'keterangan' => 'Tidak masuk opsi',
         ]);
 
-        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/opsi-barang');
+        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/opsi-barang', $this->headers);
 
         $response
             ->assertOk()
@@ -97,7 +121,7 @@ class PenjualanItemApiTest extends TestCase
             'order_penawaran_item_id' => $sourceItem->id,
             'gudang_id' => $gudang->id,
             'qty' => 3,
-        ]);
+        ], $this->headers);
 
         $createResponse
             ->assertCreated()
@@ -117,7 +141,7 @@ class PenjualanItemApiTest extends TestCase
             'order_penawaran_item_id' => $sourceItem->id,
             'gudang_id' => $gudang->id,
             'qty' => 4,
-        ])
+        ], $this->headers)
             ->assertOk()
             ->assertJsonPath('data.total_harga', '48000.00');
 
@@ -126,7 +150,7 @@ class PenjualanItemApiTest extends TestCase
             'total_harga' => '48000.00',
         ]);
 
-        $this->deleteJson('/api/penjualan/'.$penjualan->id.'/items/'.$itemId)
+        $this->deleteJson('/api/penjualan/'.$penjualan->id.'/items/'.$itemId, [], $this->headers)
             ->assertOk()
             ->assertJsonPath('message', 'Item penjualan berhasil dihapus.');
 
@@ -169,7 +193,7 @@ class PenjualanItemApiTest extends TestCase
             'total_harga' => 165000,
         ]);
 
-        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/items');
+        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/items', $this->headers);
 
         $response
             ->assertOk()
@@ -178,5 +202,74 @@ class PenjualanItemApiTest extends TestCase
             ->assertJsonPath('data.0.qty', '50.00')
             ->assertJsonPath('data.0.harga_satuan', '3000.00')
             ->assertJsonPath('data.0.total_harga', '150000.00');
+    }
+
+    public function test_penjualan_item_index_includes_stock_and_status_from_warehouse_stock(): void
+    {
+        $gudang = Gudang::query()->create([
+            'nama_gudang' => 'Gudang Penjualan',
+            'alamat' => 'Jl. Melati',
+            'nama_pic' => 'Budi',
+            'no_pic' => '08123456789',
+        ]);
+
+        $order = OrderPenawaran::query()->create([
+            'tanggal_pesan' => '2026-04-20',
+            'tanggal_dikirim' => '2026-04-25',
+            'nama_pembeli' => 'SPPG A',
+            'keterangan' => 'Bisa dijual',
+        ]);
+
+        $sourceItem = $order->items()->create([
+            'nama_barang' => 'Kentang',
+            'qty' => 5,
+            'satuan' => 'Kg',
+            'harga_satuan' => 12000,
+            'keterangan' => null,
+        ]);
+
+        $penjualan = Penjualan::query()->create([
+            'order_penawaran_id' => $order->id,
+            'kode_penjualan' => 'TRX-002',
+            'tanggal' => '2026-04-25',
+            'status' => 'draft',
+            'total_harga' => 0,
+        ]);
+
+        $penjualan->items()->create([
+            'order_penawaran_item_id' => $sourceItem->id,
+            'produk_id' => $sourceItem->produk_id,
+            'gudang_id' => $gudang->id,
+            'nama_barang' => 'Kentang',
+            'qty' => 7,
+            'satuan' => 'Kg',
+            'harga_satuan' => 12000,
+            'total_harga' => 84000,
+        ]);
+
+        WarehouseStokBasah::query()->create([
+            'warehouse_inbound_id' => null,
+            'gudang_id' => $gudang->id,
+            'nama_barang' => 'Kentang',
+            'qty' => 4,
+            'satuan_terkecil' => 'Kg',
+            'harga_beli' => 10000,
+        ]);
+
+        WarehouseStokKering::query()->create([
+            'warehouse_inbound_id' => null,
+            'gudang_id' => $gudang->id,
+            'nama_barang' => 'Kentang',
+            'qty' => 2,
+            'satuan_terkecil' => 'Kg',
+            'harga_beli' => 11000,
+        ]);
+
+        $response = $this->getJson('/api/penjualan/'.$penjualan->id.'/items', $this->headers);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.0.stok_tersedia', '6.00')
+            ->assertJsonPath('data.0.status_stok', 'pending');
     }
 }
