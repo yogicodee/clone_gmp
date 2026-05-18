@@ -41,6 +41,21 @@ const initialForm: FormType = {
     keterangan: "",
 };
 
+function formatQty(value: number | string): string {
+    const numericValue = Number(value);
+
+    if (Number.isNaN(numericValue)) {
+        return String(value);
+    }
+
+    return Number.isInteger(numericValue)
+        ? numericValue.toLocaleString("id-ID")
+        : numericValue.toLocaleString("id-ID", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        });
+}
+
 export default function Page() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
@@ -412,7 +427,7 @@ export default function Page() {
                                         {(normalizedCurrentPage - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
-                                    <td className="p-3">{item.qty}</td>
+                                    <td className="p-3">{formatQty(item.qty)}</td>
                                     <td className="p-3">{item.satuan}</td>
                                     <td className="p-3">{formatCurrency(item.harga_satuan)}</td>
                                     <td className="p-3">{item.keterangan ?? "-"}</td>
@@ -470,17 +485,19 @@ export default function Page() {
             <AnimatePresence>
                 {openForm ? (
                     <Modal onClose={resetForm}>
-                        <motion.div className="bg-white rounded-lg p-6 w-full max-w-xl space-y-4">
-                            <h2 className="text-lg font-semibold">
-                                {editTarget ? "Edit Barang" : "Tambah Barang"}
-                            </h2>
+                        <motion.div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-5">
+                            <div>
+                                <h2 className="text-2xl font-semibold tracking-tight">
+                                    {editTarget ? "Edit Barang" : "Tambah Barang"}
+                                </h2>
+                            </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Pilih Nama Barang</label>
+                                <label className="text-sm font-medium text-slate-700">Pilih Nama Barang</label>
                                 <select
                                     value={form.produk_id}
                                     onChange={(e) => handleProdukChange(e.target.value)}
-                                    className={`w-full border p-2 rounded-md ${fieldErrors.produk_id ? "border-red-500 focus:outline-red-500" : ""}`}
+                                    className={`w-full rounded-xl border px-3 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/20 ${fieldErrors.produk_id ? "border-red-500" : "border-slate-200"}`}
                                 >
                                     <option value="">Pilih Nama Barang</option>
                                     {produkOptions.map((item) => (
@@ -494,9 +511,9 @@ export default function Page() {
                                 ) : null}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Qty</label>
+                                    <label className="text-sm font-medium text-slate-700">Qty</label>
                                     <input
                                         type="number"
                                         min="1"
@@ -505,33 +522,16 @@ export default function Page() {
                                             setForm((prev) => ({ ...prev, qty: e.target.value }));
                                             clearFieldError("qty");
                                         }}
-                                        className={`w-full border p-2 rounded-md ${fieldErrors.qty ? "border-red-500 focus:outline-red-500" : ""}`}
-                                        placeholder="Qty"
+                                        className={`w-full rounded-xl border px-3 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/20 ${fieldErrors.qty ? "border-red-500" : "border-slate-200"}`}
+                                        placeholder="Masukkan qty"
                                     />
                                     {fieldErrors.qty ? (
                                         <p className="text-xs text-red-600">{fieldErrors.qty}</p>
                                     ) : null}
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Satuan</label>
-                                    <input
-                                        value={form.satuan}
-                                        readOnly
-                                        className={`w-full border p-2 rounded-md bg-slate-50 text-slate-700 ${fieldErrors.satuan ? "border-red-500 focus:outline-red-500" : ""}`}
-                                        placeholder="Satuan"
-                                    />
-                                    {fieldErrors.satuan ? (
-                                        <p className="text-xs text-red-600">{fieldErrors.satuan}</p>
-                                    ) : (
-                                        <p className="text-xs text-gray-500">Satuan otomatis mengikuti barang yang dipilih.</p>
-                                    )}
-                                </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Harga Penawaran</label>
+                                    <label className="text-sm font-medium text-slate-700">Harga Penawaran</label>
                                     <input
                                         type="number"
                                         min="0"
@@ -543,8 +543,8 @@ export default function Page() {
                                             }));
                                             clearFieldError("harga_satuan");
                                         }}
-                                        className={`w-full border p-2 rounded-md ${fieldErrors.harga_satuan ? "border-red-500 focus:outline-red-500" : ""}`}
-                                        placeholder="Harga Penawaran"
+                                        className={`w-full rounded-xl border px-3 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/20 ${fieldErrors.harga_satuan ? "border-red-500" : "border-slate-200"}`}
+                                        placeholder="Masukkan harga penawaran"
                                     />
                                     {fieldErrors.harga_satuan ? (
                                         <p className="text-xs text-red-600">{fieldErrors.harga_satuan}</p>
@@ -552,29 +552,56 @@ export default function Page() {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-end">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-700">Satuan</label>
+                                    <input
+                                        value={form.satuan}
+                                        readOnly
+                                        className={`w-full rounded-xl border px-3 py-3 text-sm text-slate-700 shadow-sm ${fieldErrors.satuan ? "border-red-500 bg-red-50" : "border-slate-200 bg-slate-50"}`}
+                                        placeholder="Satuan"
+                                    />
+                                    {fieldErrors.satuan ? (
+                                        <p className="text-xs text-red-600">{fieldErrors.satuan}</p>
+                                    ) : (
+                                        <p className="text-xs text-slate-500">Satuan otomatis mengikuti barang yang dipilih.</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-700">Estimasi Total</label>
+                                    <div className="flex min-h-[74px] items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                        <p className="text-xs font-medium text-emerald-700">Preview</p>
+                                        <p className="text-lg font-semibold text-emerald-800">
+                                            {formatCurrency(Number(form.qty || 0) * Number(form.harga_satuan || 0))}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Keterangan</label>
+                                <label className="text-sm font-medium text-slate-700">Keterangan</label>
                                 <input
                                     value={form.keterangan}
                                     onChange={(e) =>
                                         setForm((prev) => ({ ...prev, keterangan: e.target.value }))
                                     }
-                                    className="w-full border p-2 rounded-md"
-                                    placeholder="Keterangan"
+                                    className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    placeholder="Tambahkan keterangan bila diperlukan"
                                 />
                             </div>
 
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-3 pt-2">
                                 <button
                                     onClick={resetForm}
-                                    className="px-4 py-2 bg-gray-200 rounded-md"
+                                    className="rounded-xl bg-slate-100 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     onClick={() => void handleSubmit()}
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-700 text-white rounded-md disabled:opacity-50"
+                                    className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-800 disabled:opacity-50"
                                 >
                                     {submitting ? "Menyimpan..." : "Simpan"}
                                 </button>

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -16,26 +17,27 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->upsertUser(
+        $adminUser = $this->upsertUser(
             'admin.demo@gmp.local',
             'Admin Demo',
             'admin'
         );
 
-        $this->upsertUser(
+        $superAdminUser = $this->upsertUser(
             'superadmin.demo@gmp.local',
             'Super Admin Demo',
             'super_admin'
         );
 
         $this->call(PermissionSeeder::class);
+        $this->syncDemoUserPermissions($adminUser, $superAdminUser);
         $this->call(DashboardSummarySeeder::class);
         $this->call(DashboardSalesBySppgSeeder::class);
         $this->call(LaporanStokBarangSeeder::class);
         $this->call(LabaRugiTransaksionalSeeder::class);
     }
 
-    private function upsertUser(string $email, string $nama, string $role): void
+    private function upsertUser(string $email, string $nama, string $role): User
     {
         $payload = [
             'email' => $email,
@@ -54,9 +56,44 @@ class DatabaseSeeder extends Seeder
             $payload['role'] = $role;
         }
 
-        User::query()->updateOrCreate(
+        return User::query()->updateOrCreate(
             ['email' => $email],
             $payload
         );
+    }
+
+    private function syncDemoUserPermissions(User $adminUser, User $superAdminUser): void
+    {
+        if (! Schema::hasTable('permissions') || ! Schema::hasTable('user_permissions')) {
+            return;
+        }
+
+        $adminPermissionCodes = [
+            'dashboard.view',
+            'master.view',
+            'master.manage',
+            'pembelian.view',
+            'pembelian.manage',
+            'warehouse.view',
+            'warehouse.manage',
+            'penjualan.view',
+            'penjualan.manage',
+            'keuangan.view',
+            'keuangan.manage',
+            'laporan.view',
+            'export.pdf',
+            'delete.data',
+        ];
+
+        $adminPermissionIds = Permission::query()
+            ->whereIn('code', $adminPermissionCodes)
+            ->pluck('id')
+            ->all();
+
+        $adminUser->permissions()->sync($adminPermissionIds);
+
+        if ($superAdminUser->normalizedRole() === 'superadmin') {
+            $superAdminUser->permissions()->syncWithoutDetaching([]);
+        }
     }
 }
