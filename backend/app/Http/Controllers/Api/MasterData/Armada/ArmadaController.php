@@ -73,7 +73,7 @@ class ArmadaController extends Controller
 
     public function update(Request $request, Armada $armada): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $armada);
 
         $armada->update($payload);
 
@@ -95,14 +95,60 @@ class ArmadaController extends Controller
     /**
      * @return array{nama_unit: string, no_pol: string, jenis_kendaraan: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Armada $ignoreArmada = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama_unit' => ['required', 'string', 'max:100'],
             'no_pol' => ['required', 'string', 'max:20'],
             'jenis_kendaraan' => ['required', Rule::in(['Roda 2', 'Roda 4'])],
         ], [
             'jenis_kendaraan.in' => 'Jenis kendaraan hanya boleh Roda 2 atau Roda 4.',
         ]);
+
+        $normalizedNamaUnit = mb_strtolower(trim($payload['nama_unit']));
+        $normalizedNoPol = $this->normalizePlate($payload['no_pol']);
+        $normalizedJenisKendaraan = mb_strtolower(trim($payload['jenis_kendaraan']));
+
+        $query = Armada::query()
+            ->when($ignoreArmada !== null, fn ($builder) => $builder->whereKeyNot($ignoreArmada->id));
+
+        $duplicateNoPol = (clone $query)
+            ->get()
+            ->contains(function (Armada $armada) use ($normalizedNoPol): bool {
+                return $this->normalizePlate((string) $armada->no_pol) === $normalizedNoPol;
+            });
+
+        if ($duplicateNoPol) {
+            abort(response()->json([
+                'message' => 'Nomor polisi armada sudah digunakan.',
+                'errors' => [
+                    'no_pol' => ['Nomor polisi armada sudah digunakan.'],
+                ],
+            ], 422));
+        }
+
+        $duplicateExists = (clone $query)
+            ->whereRaw('LOWER(TRIM(nama_unit)) = ?', [$normalizedNamaUnit])
+            ->whereRaw('LOWER(TRIM(jenis_kendaraan)) = ?', [$normalizedJenisKendaraan])
+            ->get()
+            ->contains(function (Armada $armada) use ($normalizedNoPol): bool {
+                return $this->normalizePlate((string) $armada->no_pol) === $normalizedNoPol;
+            });
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Armada dengan nama unit, nomor polisi, dan jenis kendaraan yang sama sudah ada.',
+                'errors' => [
+                    'nama_unit' => ['Armada dengan nama unit, nomor polisi, dan jenis kendaraan yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
+    }
+
+    private function normalizePlate(string $value): string
+    {
+        return mb_strtolower(preg_replace('/\s+/', '', trim($value)) ?? '');
     }
 }
