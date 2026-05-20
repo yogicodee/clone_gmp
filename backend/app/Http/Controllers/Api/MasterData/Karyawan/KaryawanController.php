@@ -85,7 +85,7 @@ class KaryawanController extends Controller
 
     public function update(Request $request, Karyawan $karyawan): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $karyawan);
 
         $karyawan->update($payload);
 
@@ -114,7 +114,7 @@ class KaryawanController extends Controller
      *     status: string
      * }
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Karyawan $ignoreKaryawan = null): array
     {
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:100'],
@@ -130,7 +130,7 @@ class KaryawanController extends Controller
             'status.in' => 'Status hanya boleh aktif atau non aktif.',
         ]);
 
-        return [
+        $payload = [
             'nama' => $validated['nama'],
             'alamat' => $validated['alamat'],
             'no_hp' => $validated['no_hp'],
@@ -138,6 +138,41 @@ class KaryawanController extends Controller
             'tanggal_masuk' => $validated['tanggal_masuk'],
             'status' => $validated['status'] === 'non aktif' ? 'nonaktif' : $validated['status'],
         ];
+
+        $normalizedNama = mb_strtolower(trim($payload['nama']));
+        $normalizedAlamat = mb_strtolower(trim($payload['alamat']));
+        $normalizedNoHp = $this->normalizePhone($payload['no_hp']);
+        $normalizedJabatan = mb_strtolower(trim($payload['jabatan']));
+        $normalizedTanggalMasuk = trim($payload['tanggal_masuk']);
+        $normalizedStatus = mb_strtolower(trim($payload['status']));
+
+        $duplicateExists = Karyawan::query()
+            ->when($ignoreKaryawan !== null, fn ($query) => $query->whereKeyNot($ignoreKaryawan->id))
+            ->whereRaw('LOWER(TRIM(nama)) = ?', [$normalizedNama])
+            ->whereRaw('LOWER(TRIM(alamat)) = ?', [$normalizedAlamat])
+            ->whereRaw('LOWER(TRIM(jabatan)) = ?', [$normalizedJabatan])
+            ->whereDate('tanggal_masuk', $normalizedTanggalMasuk)
+            ->whereRaw('LOWER(TRIM(status)) = ?', [$normalizedStatus])
+            ->get()
+            ->contains(function (Karyawan $karyawan) use ($normalizedNoHp): bool {
+                return $this->normalizePhone((string) $karyawan->no_hp) === $normalizedNoHp;
+            });
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Karyawan dengan nama, alamat, no HP, jabatan, tanggal masuk, dan status yang sama sudah ada.',
+                'errors' => [
+                    'nama' => ['Karyawan dengan nama, alamat, no HP, jabatan, tanggal masuk, dan status yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
+    }
+
+    private function normalizePhone(string $value): string
+    {
+        return preg_replace('/\D+/', '', trim($value)) ?? '';
     }
 
     /**
