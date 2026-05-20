@@ -97,7 +97,7 @@ class ProdukController extends Controller
      */
     private function validatePayload(Request $request, ?Produk $produk = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'sku' => [
                 'required',
                 'string',
@@ -112,5 +112,27 @@ class ProdukController extends Controller
             'sku.regex' => 'SKU hanya boleh berisi huruf kapital, angka, dan tanda minus (-).',
             'sku.unique' => 'SKU sudah digunakan.',
         ]);
+
+        $normalizedNama = mb_strtolower(trim($payload['nama']));
+        $normalizedKategori = mb_strtolower(trim($payload['kategori']));
+        $normalizedSatuan = mb_strtolower(trim($payload['satuan']));
+
+        $duplicateExists = Produk::query()
+            ->when($produk !== null, fn ($query) => $query->whereKeyNot($produk->id))
+            ->whereRaw('LOWER(TRIM(nama)) = ?', [$normalizedNama])
+            ->whereRaw('LOWER(TRIM(kategori)) = ?', [$normalizedKategori])
+            ->whereRaw('LOWER(TRIM(satuan)) = ?', [$normalizedSatuan])
+            ->exists();
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Produk dengan nama, kategori, dan satuan yang sama sudah ada.',
+                'errors' => [
+                    'nama' => ['Produk dengan nama, kategori, dan satuan yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
     }
 }
