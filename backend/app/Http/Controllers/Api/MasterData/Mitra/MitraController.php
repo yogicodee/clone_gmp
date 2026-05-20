@@ -74,7 +74,7 @@ class MitraController extends Controller
 
     public function update(Request $request, Mitra $mitra): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $mitra);
 
         $mitra->update($payload);
 
@@ -96,9 +96,9 @@ class MitraController extends Controller
     /**
      * @return array{nama_yayasan: string, alamat: string, nama_pic: string, no_pic: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Mitra $ignoreMitra = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama_yayasan' => ['required', 'string', 'max:100'],
             'alamat' => ['required', 'string'],
             'nama_pic' => ['required', 'string', 'max:100'],
@@ -108,5 +108,36 @@ class MitraController extends Controller
             'no_pic.min' => 'No PIC minimal 10 karakter.',
             'no_pic.max' => 'No PIC maksimal 20 karakter.',
         ]);
+
+        $normalizedNamaYayasan = mb_strtolower(trim($payload['nama_yayasan']));
+        $normalizedAlamat = mb_strtolower(trim($payload['alamat']));
+        $normalizedNamaPic = mb_strtolower(trim($payload['nama_pic']));
+        $normalizedNoPic = $this->normalizePhone($payload['no_pic']);
+
+        $duplicateExists = Mitra::query()
+            ->when($ignoreMitra !== null, fn ($query) => $query->whereKeyNot($ignoreMitra->id))
+            ->whereRaw('LOWER(TRIM(nama_yayasan)) = ?', [$normalizedNamaYayasan])
+            ->whereRaw('LOWER(TRIM(alamat)) = ?', [$normalizedAlamat])
+            ->whereRaw('LOWER(TRIM(nama_pic)) = ?', [$normalizedNamaPic])
+            ->get()
+            ->contains(function (Mitra $mitra) use ($normalizedNoPic): bool {
+                return $this->normalizePhone((string) $mitra->no_pic) === $normalizedNoPic;
+            });
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Mitra dengan nama yayasan, alamat, PIC, dan no PIC yang sama sudah ada.',
+                'errors' => [
+                    'nama_yayasan' => ['Mitra dengan nama yayasan, alamat, PIC, dan no PIC yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
+    }
+
+    private function normalizePhone(string $value): string
+    {
+        return preg_replace('/\D+/', '', trim($value)) ?? '';
     }
 }

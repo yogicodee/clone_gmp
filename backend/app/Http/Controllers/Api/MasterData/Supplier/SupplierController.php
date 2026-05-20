@@ -77,7 +77,7 @@ class SupplierController extends Controller
 
     public function update(Request $request, Supplier $supplier): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $supplier);
 
         $supplier->update($payload);
 
@@ -99,9 +99,9 @@ class SupplierController extends Controller
     /**
      * @return array{nama: string, alamat: string, no_telp: string, kategori: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Supplier $ignoreSupplier = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama' => ['required', 'string', 'max:100'],
             'alamat' => ['required', 'string'],
             'no_telp' => ['required', 'string', 'min:10', 'max:20', 'regex:/^([0-9\\s\\-\\+\\(\\)]*)$/'],
@@ -111,6 +111,35 @@ class SupplierController extends Controller
             'no_telp.min' => 'No telepon minimal 10 karakter.',
             'no_telp.max' => 'No telepon maksimal 20 karakter.',
         ]);
+
+        $normalizedNama = mb_strtolower(trim($payload['nama']));
+        $normalizedAlamat = mb_strtolower(trim($payload['alamat']));
+        $normalizedTelepon = $this->normalizePhone($payload['no_telp']);
+
+        $duplicateExists = Supplier::query()
+            ->when($ignoreSupplier !== null, fn ($query) => $query->whereKeyNot($ignoreSupplier->id))
+            ->whereRaw('LOWER(TRIM(nama)) = ?', [$normalizedNama])
+            ->whereRaw('LOWER(TRIM(alamat)) = ?', [$normalizedAlamat])
+            ->get()
+            ->contains(function (Supplier $supplier) use ($normalizedTelepon): bool {
+                return $this->normalizePhone((string) $supplier->no_telp) === $normalizedTelepon;
+            });
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Supplier dengan nama, alamat, dan no telepon yang sama sudah ada.',
+                'errors' => [
+                    'nama' => ['Supplier dengan nama, alamat, dan no telepon yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
+    }
+
+    private function normalizePhone(string $value): string
+    {
+        return preg_replace('/\D+/', '', trim($value)) ?? '';
     }
 
     /**
