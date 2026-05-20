@@ -415,7 +415,7 @@ export default function Page() {
 
 function Modal({
     children,
-    onClose,
+
 }: {
     children: React.ReactNode;
     onClose: () => void;
@@ -423,7 +423,7 @@ function Modal({
     return (
         <motion.div
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-            onClick={onClose}
+
         >
             <div onClick={(e) => e.stopPropagation()}>
                 {children}
