@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
-import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import { extractErrorMessage, type ApiListResponse, type Meta } from "@/lib/transaksiPembelian";
 
 type SuratJalanItem = {
     id: number;
@@ -44,6 +44,15 @@ const EXPORT_COMPANY_LINES = [
     "No. Tlp 081803010020",
 ];
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 const formatTanggal = (value: string) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -62,15 +71,19 @@ export default function Page() {
 
     const [detail, setDetail] = useState<SuratJalanDetail | null>(null);
     const [items, setItems] = useState<SuratJalanItem[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [editTarget, setEditTarget] = useState<SuratJalanItem | null>(null);
     const [form, setForm] = useState<FormType>(initialForm);
     const [openForm, setOpenForm] = useState(false);
+    const [sortField, setSortField] = useState<keyof SuratJalanItem>("nama_barang");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
@@ -81,17 +94,35 @@ export default function Page() {
 
             const [detailResponse, itemsResponse] = await Promise.all([
                 api.get(`/surat-jalan/${suratJalanId}`),
-                api.get(`/surat-jalan/${suratJalanId}/items`),
+                api.get<ApiListResponse<SuratJalanItem>>(`/surat-jalan/${suratJalanId}/items`, {
+                    params: {
+                        search: search || undefined,
+                        sort_field: sortField,
+                        sort_order: sortOrder,
+                        page: currentPage,
+                        per_page: perPage,
+                    },
+                }),
             ]);
 
             setDetail(detailResponse.data.data);
             setItems(itemsResponse.data.data ?? []);
+            setMeta(itemsResponse.data.meta ?? initialMeta);
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
         } finally {
             setLoading(false);
         }
-    }, [suratJalanId]);
+    }, [currentPage, perPage, search, sortField, sortOrder, suratJalanId]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
 
     useEffect(() => {
         if (!Number.isNaN(suratJalanId)) {
@@ -142,23 +173,17 @@ export default function Page() {
         }
     };
 
-    const filteredItems = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-        return items.filter((item) => {
-            if (!normalizedSearch) return true;
-            return (
-                item.nama_barang.toLowerCase().includes(normalizedSearch) ||
-                (item.keterangan ?? "").toLowerCase().includes(normalizedSearch)
-            );
-        });
-    }, [items, search]);
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredItems.length / perPage));
-    const normalizedCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedItems = filteredItems.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
-    );
+    const handleSort = (field: keyof SuratJalanItem) => {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+
+        setSortField(field);
+        setSortOrder("asc");
+    };
 
     const handleExportPdf = () => {
         if (!detail) {
@@ -288,11 +313,8 @@ export default function Page() {
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari barang..."
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
                 />
 
@@ -312,10 +334,26 @@ export default function Page() {
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">No</th>
-                            <th className="p-3 text-left">Nama Barang</th>
-                            <th className="p-3">Qty</th>
-                            <th className="p-3">Satuan</th>
-                            <th className="p-3">Keterangan</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
+                                    Nama Barang
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("qty")} className="flex items-center gap-2">
+                                    Qty
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("satuan")} className="flex items-center gap-2">
+                                    Satuan
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("keterangan")} className="flex items-center gap-2">
+                                    Keterangan
+                                </button>
+                            </th>
                             <th className="p-3">Aksi</th>
                         </tr>
                     </thead>
@@ -326,17 +364,17 @@ export default function Page() {
                                     Memuat data...
                                 </td>
                             </tr>
-                        ) : paginatedItems.length === 0 ? (
+                        ) : items.length === 0 ? (
                             <tr>
                                 <td colSpan={6} className="p-6 text-center text-gray-500">
                                     Belum ada item surat jalan.
                                 </td>
                             </tr>
                         ) : (
-                            paginatedItems.map((item, index) => (
+                            items.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3 text-center">{Number(item.qty)}</td>
@@ -361,7 +399,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={currentPage === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -372,14 +410,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages}
+                    disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
