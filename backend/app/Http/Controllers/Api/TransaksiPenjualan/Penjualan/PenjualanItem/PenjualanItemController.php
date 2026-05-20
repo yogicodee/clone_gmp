@@ -9,10 +9,12 @@ use App\Models\TransaksiPenjualan\PenjualanItem;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
 use App\Models\WarehouseSystem\WarehouseStokKering;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class PenjualanItemController extends Controller
 {
@@ -20,9 +22,16 @@ class PenjualanItemController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
+            'sort_field' => ['nullable', Rule::in(['nama_barang', 'qty', 'satuan', 'harga_satuan', 'total_harga', 'stok_tersedia', 'status_stok'])],
+            'sort_order' => ['nullable', Rule::in(['asc', 'desc'])],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $search = $filters['search'] ?? null;
+        $sortField = $filters['sort_field'] ?? 'nama_barang';
+        $sortOrder = $filters['sort_order'] ?? 'asc';
+        $perPage = $filters['per_page'] ?? 10;
+        $currentPage = max((int) $request->query('page', 1), 1);
 
         $items = $penjualan->items()
             ->with('gudang')
@@ -70,9 +79,45 @@ class PenjualanItemController extends Controller
                 ->values();
         }
 
+        $items = $items
+            ->sort(function (array $first, array $second) use ($sortField, $sortOrder): int {
+                $firstValue = $first[$sortField] ?? null;
+                $secondValue = $second[$sortField] ?? null;
+
+                if (in_array($sortField, ['qty', 'harga_satuan', 'total_harga', 'stok_tersedia'], true)) {
+                    $comparison = (float) $firstValue <=> (float) $secondValue;
+
+                    return $sortOrder === 'asc' ? $comparison : -$comparison;
+                }
+
+                $comparison = strnatcasecmp((string) $firstValue, (string) $secondValue);
+
+                return $sortOrder === 'asc' ? $comparison : -$comparison;
+            })
+            ->values();
+
+        $paginatedItems = new LengthAwarePaginator(
+            $items->forPage($currentPage, $perPage)->values()->all(),
+            $items->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
         return response()->json([
             'message' => 'Data item penjualan berhasil diambil.',
-            'data' => $items,
+            'data' => $paginatedItems->items(),
+            'meta' => [
+                'current_page' => $paginatedItems->currentPage(),
+                'last_page' => $paginatedItems->lastPage(),
+                'per_page' => $paginatedItems->perPage(),
+                'total' => $paginatedItems->total(),
+                'from' => $paginatedItems->firstItem(),
+                'to' => $paginatedItems->lastItem(),
+            ],
         ]);
     }
 

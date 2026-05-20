@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { useFetch } from "@/hooks/useFetch";
-import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import { extractErrorMessage, type ApiListResponse, type Meta } from "@/lib/transaksiPembelian";
 import axios from "axios";
 
 type OrderPenawaranSource = {
@@ -38,6 +37,15 @@ const initialForm: FormType = {
     status: "draft",
 };
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 const formatRupiah = (value: string | number) => {
     const number = Number(value || 0);
     return new Intl.NumberFormat("id-ID").format(number);
@@ -58,8 +66,9 @@ const formatTanggal = (value: string) => {
 
 export default function Page() {
     const router = useRouter();
-    const { data, refetch } = useFetch<Penjualan>("/penjualan");
 
+    const [data, setData] = useState<Penjualan[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [form, setForm] = useState<FormType>(initialForm);
     const [editTarget, setEditTarget] = useState<Penjualan | null>(null);
     const [openForm, setOpenForm] = useState(false);
@@ -69,11 +78,47 @@ export default function Page() {
     const [successMessage, setSuccessMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [sortField, setSortField] = useState<keyof Penjualan>("tanggal");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
+
+    const fetchData = async () => {
+        try {
+            setErrorMessage("");
+
+            const response = await api.get<ApiListResponse<Penjualan>>("/penjualan", {
+                params: {
+                    search: search || undefined,
+                    sort_field: sortField,
+                    sort_order: sortOrder,
+                    page: currentPage,
+                    per_page: perPage,
+                },
+            });
+
+            setData(response.data.data ?? []);
+            setMeta(response.data.meta ?? initialMeta);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        }
+    };
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
+
+    useEffect(() => {
+        void fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, sortField, sortOrder, currentPage]);
 
     const resetForm = () => {
         setForm(initialForm);
@@ -142,7 +187,7 @@ export default function Page() {
             }
 
             resetForm();
-            await refetch();
+            await fetchData();
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 const apiErrors = error.response?.data?.errors;
@@ -182,7 +227,11 @@ export default function Page() {
             setDeleteTarget(null);
             setErrorMessage("");
             setSuccessMessage("Penjualan berhasil dihapus.");
-            await refetch();
+            if (data.length === 1 && currentPage > 1) {
+                setCurrentPage((prev) => prev - 1);
+            } else {
+                await fetchData();
+            }
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
             setSuccessMessage("");
@@ -201,35 +250,7 @@ export default function Page() {
         setSortOrder("asc");
     };
 
-    const filteredData = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-        const result = data.filter((item) => {
-            if (!normalizedSearch) return true;
-
-            return (
-                item.kode_penjualan.toLowerCase().includes(normalizedSearch) ||
-                item.status.toLowerCase().includes(normalizedSearch) ||
-                (item.order_penawaran?.nama_pembeli ?? "").toLowerCase().includes(normalizedSearch) ||
-                (item.order_penawaran?.keterangan ?? "").toLowerCase().includes(normalizedSearch)
-            );
-        });
-
-        result.sort((a, b) => {
-            const aVal = String(a[sortField] ?? "").toLowerCase();
-            const bVal = String(b[sortField] ?? "").toLowerCase();
-            const comparison = aVal.localeCompare(bVal, "id", { numeric: true });
-            return sortOrder === "asc" ? comparison : comparison * -1;
-        });
-
-        return result;
-    }, [data, search, sortField, sortOrder]);
-
-    const totalPages = Math.ceil(filteredData.length / perPage);
-    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
-    const paginatedData = filteredData.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
-    );
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     return (
         <div className="p-6 space-y-6">
@@ -252,11 +273,8 @@ export default function Page() {
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari kode / status / pembeli..."
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
@@ -300,11 +318,11 @@ export default function Page() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.length > 0 ? (
-                            paginatedData.map((item, index) => (
+                        {data.length > 0 ? (
+                            data.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.kode_penjualan}</td>
                                     <td className="p-3">{formatTanggal(item.tanggal)}</td>
@@ -348,7 +366,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -359,14 +377,14 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
+                    disabled={currentPage === totalPages || totalPages === 0}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border rounded-md"
                 >
