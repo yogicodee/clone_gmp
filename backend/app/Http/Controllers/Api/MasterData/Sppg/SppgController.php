@@ -82,7 +82,7 @@ class SppgController extends Controller
 
     public function update(Request $request, Sppg $sppg): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $sppg);
 
         $sppg->update($payload);
 
@@ -110,9 +110,9 @@ class SppgController extends Controller
      *     no_penanggungjawab: string
      * }
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Sppg $ignoreSppg = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama_sppg' => ['required', 'string', 'max:100'],
             'alamat' => ['required', 'string'],
             'nama_yayasan' => ['required', 'string', 'max:100'],
@@ -123,5 +123,38 @@ class SppgController extends Controller
             'no_penanggungjawab.min' => 'No HP minimal 10 karakter.',
             'no_penanggungjawab.max' => 'No HP maksimal 20 karakter.',
         ]);
+
+        $normalizedNamaSppg = mb_strtolower(trim($payload['nama_sppg']));
+        $normalizedAlamat = mb_strtolower(trim($payload['alamat']));
+        $normalizedNamaYayasan = mb_strtolower(trim($payload['nama_yayasan']));
+        $normalizedPenanggungJawab = mb_strtolower(trim($payload['nama_penanggungjawab']));
+        $normalizedNoPenanggungJawab = $this->normalizePhone($payload['no_penanggungjawab']);
+
+        $duplicateExists = Sppg::query()
+            ->when($ignoreSppg !== null, fn ($query) => $query->whereKeyNot($ignoreSppg->id))
+            ->whereRaw('LOWER(TRIM(nama_sppg)) = ?', [$normalizedNamaSppg])
+            ->whereRaw('LOWER(TRIM(alamat)) = ?', [$normalizedAlamat])
+            ->whereRaw('LOWER(TRIM(nama_yayasan)) = ?', [$normalizedNamaYayasan])
+            ->whereRaw('LOWER(TRIM(nama_penanggungjawab)) = ?', [$normalizedPenanggungJawab])
+            ->get()
+            ->contains(function (Sppg $sppg) use ($normalizedNoPenanggungJawab): bool {
+                return $this->normalizePhone((string) $sppg->no_penanggungjawab) === $normalizedNoPenanggungJawab;
+            });
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'SPPG dengan nama, alamat, yayasan, penanggung jawab, dan no HP yang sama sudah ada.',
+                'errors' => [
+                    'nama_sppg' => ['SPPG dengan nama, alamat, yayasan, penanggung jawab, dan no HP yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
+    }
+
+    private function normalizePhone(string $value): string
+    {
+        return preg_replace('/\D+/', '', trim($value)) ?? '';
     }
 }
