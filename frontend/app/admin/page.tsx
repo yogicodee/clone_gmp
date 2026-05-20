@@ -430,7 +430,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="label" />
                     <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                    <Tooltip formatter={(value: number) => toRupiah(Number(value))} />
+                    <Tooltip formatter={(value) => toRupiah(Number(value ?? 0))} />
                     <Legend />
                     <Line type="monotone" dataKey="pendapatan" stroke="#15803d" strokeWidth={3} name="Pendapatan" />
                     <Line type="monotone" dataKey="pemasukan_lain" stroke="#2563eb" strokeWidth={3} name="Pemasukan Lain" />
@@ -469,7 +469,7 @@ export default function Dashboard() {
                           <Cell key={item.sppg_id} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => toRupiah(Number(value))} />
+                      <Tooltip formatter={(value) => toRupiah(Number(value ?? 0))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -516,7 +516,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="nama_operasional" />
                     <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                    <Tooltip formatter={(value: number) => toRupiah(Number(value))} />
+                    <Tooltip formatter={(value) => toRupiah(Number(value ?? 0))} />
                     <Legend />
                     <Bar dataKey="total_pengeluaran" name="Pengeluaran" fill="#7f1d1d" radius={[8, 8, 0, 0]} />
                   </BarChart>

@@ -242,7 +242,7 @@ export default function PiutangSPPGChart() {
                                     outerRadius={120}
                                     paddingAngle={4}
                                     label={({ percent }) =>
-                                        `${(percent * 100).toFixed(0)}%`
+                                        `${((percent ?? 0) * 100).toFixed(0)}%`
                                     }
                                 >
                                     {pieData.map((_, index) => (
