@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ActivityLog\ActivityLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Dashboard\DashboardCashflowTrend\DashboardCashflowTrendController;
 use App\Http\Controllers\Api\Dashboard\DashboardExpenseAnalysis\DashboardExpenseAnalysisController;
@@ -52,7 +53,9 @@ Route::prefix('auth')->group(function (): void {
     });
 });
 
-Route::middleware('auth.api')->group(function (): void {
+Route::middleware(['auth.api', 'activity.log'])->group(function (): void {
+    Route::get('activity-logs', [ActivityLogController::class, 'index']);
+
     Route::middleware('permission:users.view')->group(function (): void {
         Route::get('users', [UserController::class, 'index']);
         Route::get('users/{user}', [UserController::class, 'show']);

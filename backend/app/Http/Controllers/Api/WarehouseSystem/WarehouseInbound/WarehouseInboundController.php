@@ -17,7 +17,7 @@ class WarehouseInboundController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
-            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'kategori', 'tanggal_masuk', 'qty', 'satuan', 'harga_satuan', 'total_harga', 'nama_supplier'])],
+            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'gudang_id', 'kategori', 'tanggal_masuk', 'qty', 'satuan', 'harga_satuan', 'total_harga', 'nama_supplier'])],
             'sort_order' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -29,15 +29,24 @@ class WarehouseInboundController extends Controller
 
         $records = WarehouseInbound::query()
             ->with('gudang')
+            ->leftJoin('gudang', 'gudang.id', '=', 'warehouse_inbounds.gudang_id')
+            ->select('warehouse_inbounds.*')
             ->when($search, function ($query, string $keyword) {
                 $query->where(function ($subQuery) use ($keyword): void {
                     $subQuery
-                        ->where('nama_barang', 'like', '%'.$keyword.'%')
-                        ->orWhere('kategori', 'like', '%'.$keyword.'%')
-                        ->orWhere('nama_supplier', 'like', '%'.$keyword.'%');
+                        ->where('warehouse_inbounds.nama_barang', 'like', '%'.$keyword.'%')
+                        ->orWhere('warehouse_inbounds.kategori', 'like', '%'.$keyword.'%')
+                        ->orWhere('warehouse_inbounds.nama_supplier', 'like', '%'.$keyword.'%')
+                        ->orWhere('gudang.nama_gudang', 'like', '%'.$keyword.'%');
                 });
             })
-            ->orderBy($sortField, $sortOrder)
+            ->orderBy(
+                match ($sortField) {
+                    'gudang_id' => 'gudang.nama_gudang',
+                    default => 'warehouse_inbounds.'.$sortField,
+                },
+                $sortOrder
+            )
             ->paginate($perPage)
             ->withQueryString();
 

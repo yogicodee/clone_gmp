@@ -30,6 +30,7 @@ import {
   Building,
   Handbag,
   Wallet,
+  History,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
@@ -138,6 +139,14 @@ export default function Sidebar({ open }: { open: boolean }) {
           open={open}
           active={pathname === "/admin"}
           onClick={() => router.push("/admin")}
+        />
+
+        <SidebarItem
+          icon={<History />}
+          label="Log Aktivitas"
+          open={open}
+          active={pathname === "/admin/log-aktivitas"}
+          onClick={() => router.push("/admin/log-aktivitas")}
         />
 
         <p className="bg-white relative border-b-2 w-auto mt-6"></p>

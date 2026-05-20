@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { ArrowUpDown, Pencil, Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
@@ -94,8 +94,8 @@ export default function Page() {
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
-    const [sortField] = useState<keyof Product>("nama_barang");
-    const [sortOrder] = useState<"asc" | "desc">("asc");
+    const [sortField, setSortField] = useState<keyof Product>("nama_barang");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
@@ -160,7 +160,17 @@ export default function Page() {
     useEffect(() => {
         void fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [search, currentPage]);
+    }, [search, currentPage, sortField, sortOrder]);
+
+    const handleSort = (field: keyof Product) => {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+
+        setSortField(field);
+        setSortOrder("asc");
+    };
 
     const openCreateForm = () => {
         setForm({
@@ -342,16 +352,66 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
-                            <th className="p-3 text-left">Nama Barang</th>
-                            <th className="p-3 text-left">Gudang</th>
-                            <th className="p-3 text-left">Kategori</th>
-                            <th className="p-3 text-left">Tanggal</th>
-                            <th className="p-3 text-left">Qty</th>
-                            <th className="p-3 text-left">Satuan</th>
-                            <th className="p-3 text-left">Harga</th>
-                            <th className="p-3 text-left">Total</th>
-                            <th className="p-3 text-left">Supplier</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex items-center gap-2 text-left">
+                                    No
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2 text-left">
+                                    Nama Barang
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("gudang_id")} className="flex items-center gap-2 text-left">
+                                    Gudang
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("kategori")} className="flex items-center gap-2 text-left">
+                                    Kategori
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("tanggal_masuk")} className="flex items-center gap-2 text-left">
+                                    Tanggal
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("qty")} className="flex items-center gap-2 text-left">
+                                    Qty
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("satuan")} className="flex items-center gap-2 text-left">
+                                    Satuan
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("harga_satuan")} className="flex items-center gap-2 text-left">
+                                    Harga
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("total_harga")} className="flex items-center gap-2 text-left">
+                                    Total
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nama_supplier")} className="flex items-center gap-2 text-left">
+                                    Supplier
+                                    <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -360,7 +420,7 @@ export default function Page() {
                         {data.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
+                                    {item.id}
                                 </td>
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
