@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Eye, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import { extractErrorMessage, type ApiListResponse, type Meta } from "@/lib/transaksiPembelian";
 import axios from "axios";
 
 type SppgOption = {
@@ -51,6 +51,15 @@ const initialForm: FormType = {
     tanggal: "",
 };
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 const formatTanggal = (value: string) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -66,6 +75,7 @@ export default function Page() {
     const router = useRouter();
 
     const [records, setRecords] = useState<TandaTerimaRecord[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
@@ -76,6 +86,7 @@ export default function Page() {
     const [openForm, setOpenForm] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<TandaTerimaRecord | null>(null);
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
@@ -88,16 +99,32 @@ export default function Page() {
             const [
                 recordsResponse,
             ] = await Promise.all([
-                api.get("/tanda-terima", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<TandaTerimaRecord>>("/tanda-terima", {
+                    params: {
+                        search: search || undefined,
+                        page: currentPage,
+                        per_page: perPage,
+                    },
+                }),
             ]);
 
             setRecords(recordsResponse.data.data ?? []);
+            setMeta(recordsResponse.data.meta ?? initialMeta);
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [currentPage, perPage, search]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -184,35 +211,18 @@ export default function Page() {
             await api.delete(`/tanda-terima/${deleteTarget.id}`);
             setDeleteTarget(null);
             setSuccessMessage("Data tanda terima berhasil dihapus.");
-            await fetchData();
+            if (records.length === 1 && currentPage > 1) {
+                setCurrentPage((prev) => prev - 1);
+            } else {
+                await fetchData();
+            }
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
         } finally {
             setSubmitting(false);
         }
     };
-
-    const filteredData = useMemo(() => {
-        const keyword = search.trim().toLowerCase();
-        return records.filter((item) => {
-            if (!keyword) return true;
-            return (
-                item.nomor_tanda_terima.toLowerCase().includes(keyword) ||
-                item.nomor_surat_jalan.toLowerCase().includes(keyword) ||
-                (item.no_po ?? "").toLowerCase().includes(keyword) ||
-                (item.sppg?.nama_sppg ?? "").toLowerCase().includes(keyword) ||
-                (item.akuntan?.nama ?? "").toLowerCase().includes(keyword) ||
-                (item.driver?.nama ?? "").toLowerCase().includes(keyword)
-            );
-        });
-    }, [records, search]);
-
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / perPage));
-    const normalizedCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedData = filteredData.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
-    );
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     return (
         <div className="p-6 space-y-6">
@@ -235,11 +245,8 @@ export default function Page() {
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari surat jalan / no PO / SPPG..."
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
                 />
 
@@ -273,17 +280,17 @@ export default function Page() {
                                     Memuat data...
                                 </td>
                             </tr>
-                        ) : paginatedData.length === 0 ? (
+                        ) : records.length === 0 ? (
                             <tr>
                                 <td colSpan={8} className="p-6 text-center text-gray-500">
                                     Belum ada data tanda terima.
                                 </td>
                             </tr>
                         ) : (
-                            paginatedData.map((item, index) => (
+                            records.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nomor_surat_jalan}</td>
                                     <td className="p-3">{item.no_po || "-"}</td>
@@ -316,7 +323,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={currentPage === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -327,14 +334,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages}
+                    disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
