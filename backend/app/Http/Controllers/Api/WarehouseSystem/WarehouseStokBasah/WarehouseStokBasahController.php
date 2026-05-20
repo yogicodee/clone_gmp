@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class WarehouseStokBasahController extends Controller
@@ -25,15 +26,39 @@ class WarehouseStokBasahController extends Controller
         $perPage = $filters['per_page'] ?? 10;
 
         $records = WarehouseStokBasah::query()
-            ->with('gudang')
-            ->when($search, fn ($query, string $keyword) => $query->where('nama_barang', 'like', '%'.$keyword.'%'))
-            ->orderBy($sortField, $sortOrder)
+            ->leftJoin('gudang', 'gudang.id', '=', 'warehouse_stok_basah.gudang_id')
+            ->selectRaw('
+                MIN(warehouse_stok_basah.id) as id,
+                warehouse_stok_basah.gudang_id,
+                warehouse_stok_basah.nama_barang,
+                SUM(warehouse_stok_basah.qty) as qty,
+                warehouse_stok_basah.satuan_terkecil,
+                warehouse_stok_basah.harga_beli,
+                MAX(gudang.nama_gudang) as gudang_nama
+            ')
+            ->when($search, function ($query, string $keyword): void {
+                $query->where(function ($subQuery) use ($keyword): void {
+                    $subQuery
+                        ->where('warehouse_stok_basah.nama_barang', 'like', '%'.$keyword.'%')
+                        ->orWhere('gudang.nama_gudang', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->groupBy(
+                'warehouse_stok_basah.gudang_id',
+                'warehouse_stok_basah.nama_barang',
+                'warehouse_stok_basah.satuan_terkecil',
+                'warehouse_stok_basah.harga_beli'
+            )
+            ->orderBy($this->resolveSortColumn($sortField), $sortOrder)
             ->paginate($perPage)
             ->withQueryString();
 
         return response()->json([
             'message' => 'Data stok basah berhasil diambil.',
-            'data' => $records->items(),
+            'data' => array_map(
+                fn ($record): array => $this->transformRecord($record),
+                $records->items()
+            ),
             'meta' => [
                 'current_page' => $records->currentPage(),
                 'last_page' => $records->lastPage(),
@@ -94,5 +119,43 @@ class WarehouseStokBasahController extends Controller
             'satuan_terkecil' => ['required', 'string', 'max:50'],
             'harga_beli' => ['required', 'numeric', 'min:0'],
         ]);
+    }
+
+    private function resolveSortColumn(string $sortField): string
+    {
+        return match ($sortField) {
+            'gudang_id' => 'gudang_nama',
+            'qty' => 'qty',
+            'satuan_terkecil' => 'warehouse_stok_basah.satuan_terkecil',
+            'harga_beli' => 'warehouse_stok_basah.harga_beli',
+            default => 'warehouse_stok_basah.nama_barang',
+        };
+    }
+
+    /**
+     * @return array{
+     *     id:int,
+     *     gudang_id:int|null,
+     *     nama_barang:string,
+     *     qty:float,
+     *     satuan_terkecil:string,
+     *     harga_beli:float,
+     *     gudang: array{id:int|null,nama_gudang:string|null}|null
+     * }
+     */
+    private function transformRecord(object $record): array
+    {
+        return [
+            'id' => (int) $record->id,
+            'gudang_id' => $record->gudang_id !== null ? (int) $record->gudang_id : null,
+            'nama_barang' => (string) $record->nama_barang,
+            'qty' => (float) $record->qty,
+            'satuan_terkecil' => (string) $record->satuan_terkecil,
+            'harga_beli' => (float) $record->harga_beli,
+            'gudang' => [
+                'id' => $record->gudang_id !== null ? (int) $record->gudang_id : null,
+                'nama_gudang' => $record->gudang_nama,
+            ],
+        ];
     }
 }

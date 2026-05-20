@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
-import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import {
+    extractErrorMessage,
+    type ApiListResponse,
+    type Meta,
+} from "@/lib/transaksiPembelian";
 import axios from "axios";
 
 type GudangOption = {
@@ -51,11 +55,22 @@ type FormType = {
 
 type FieldErrors = Partial<Record<keyof FormType, string>>;
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 export default function Page() {
-    const { data, refetch } = useFetch<Product>("/inbound");
-    const { data: supplierData } = useFetch<SupplierOption>("/supplier");
-    const { data: gudangData } = useFetch<GudangOption>("/gudang");
-    const { data: produkData } = useFetch<ProdukOption>("/produk");
+    const [data, setData] = useState<Product[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
+    const [loading, setLoading] = useState(true);
+    const { data: supplierData } = useFetch<SupplierOption>("/supplier?per_page=100");
+    const { data: gudangData } = useFetch<GudangOption>("/gudang?per_page=100");
+    const { data: produkData } = useFetch<ProdukOption>("/produk?per_page=100");
 
     const [form, setForm] = useState<FormType>({
         gudang_id: null,
@@ -77,6 +92,7 @@ export default function Page() {
     const [errorMessage, setErrorMessage] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [sortField] = useState<keyof Product>("nama_barang");
     const [sortOrder] = useState<"asc" | "desc">("asc");
@@ -107,6 +123,44 @@ export default function Page() {
         setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
         setErrorMessage("");
     };
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            setErrorMessage("");
+
+            const response = await api.get<ApiListResponse<Product>>("/inbound", {
+                params: {
+                    search: search || undefined,
+                    sort_field: sortField,
+                    sort_order: sortOrder,
+                    page: currentPage,
+                    per_page: perPage,
+                },
+            });
+
+            setData(response.data.data ?? []);
+            setMeta(response.data.meta ?? initialMeta);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
+
+    useEffect(() => {
+        void fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, currentPage]);
 
     const openCreateForm = () => {
         setForm({
@@ -159,8 +213,8 @@ export default function Page() {
                 setSuccessMessage("Data inbound berhasil ditambahkan.");
             }
 
-            await refetch();
             resetForm();
+            await fetchData();
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 const apiErrors = error.response?.data?.errors;
@@ -213,10 +267,15 @@ export default function Page() {
 
         try {
             await api.delete(`/inbound/${deleteId}`);
-            await refetch();
             setDeleteId(null);
             setErrorMessage("");
             setSuccessMessage("Data inbound berhasil dihapus.");
+
+            if (data.length === 1 && currentPage > 1) {
+                setCurrentPage((prev) => prev - 1);
+            } else {
+                await fetchData();
+            }
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
             setSuccessMessage("");
@@ -242,37 +301,7 @@ export default function Page() {
         setOpenForm(false);
     };
 
-    const filteredData = useMemo(() => {
-        let result = [...data];
-
-        if (search) {
-            result = result.filter(
-                (item) =>
-                    item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
-                    item.nama_supplier.toLowerCase().includes(search.toLowerCase()) ||
-                    item.gudang?.nama_gudang?.toLowerCase().includes(search.toLowerCase())
-            );
-        }
-
-        result.sort((a, b) => {
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
-
-            return sortOrder === "asc"
-                ? aVal.localeCompare(bVal)
-                : bVal.localeCompare(aVal);
-        });
-
-        return result;
-    }, [data, search, sortField, sortOrder]);
-
-    const totalPages = Math.ceil(filteredData.length / perPage);
-    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
-
-    const paginatedData = filteredData.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
-    );
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     return (
         <div className="p-6 space-y-6">
@@ -295,11 +324,8 @@ export default function Page() {
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari barang / supplier / gudang..."
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
@@ -331,10 +357,10 @@ export default function Page() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((item, index) => (
+                        {data.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                    {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                 </td>
                                 <td className="p-3">{item.nama_barang}</td>
                                 <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
@@ -362,7 +388,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={(meta.current_page || 1) === 1 || loading}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >
@@ -373,14 +399,15 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border border-white rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                        disabled={loading}
+                        className={`px-3 py-1 border border-white rounded-md ${meta.current_page === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
+                    disabled={(meta.current_page || 1) === totalPages || totalPages === 0 || loading}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >

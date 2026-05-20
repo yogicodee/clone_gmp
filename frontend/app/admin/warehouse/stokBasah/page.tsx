@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpDown } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import api from "@/lib/api";
+import {
+    extractErrorMessage,
+    type ApiListResponse,
+    type Meta,
+} from "@/lib/transaksiPembelian";
 
 type GudangOption = {
     id: number;
@@ -29,78 +34,77 @@ type GroupedProduct = {
     gudang?: GudangOption | null;
 };
 
-export default function Page() {
-    const { data } = useFetch<Product>("/stok-basah");
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
 
+export default function Page() {
+    const [data, setData] = useState<GroupedProduct[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
+    const [loading, setLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState("");
+
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [sortField, setSortField] = useState<keyof Product>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
-    const groupedData = useMemo<GroupedProduct[]>(() => {
-        const groupedMap = new Map<string, GroupedProduct>();
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            setErrorMessage("");
 
-        for (const item of data) {
-            const hargaBeli = Number(item.harga_beli);
-            const qty = Number(item.qty);
-            const key = [
-                item.nama_barang.trim().toLowerCase(),
-                item.gudang_id,
-                item.satuan_terkecil.trim().toLowerCase(),
-                hargaBeli,
-            ].join("|");
+            const response = await api.get<ApiListResponse<Product>>("/stok-basah", {
+                params: {
+                    search: search || undefined,
+                    sort_field: sortField,
+                    sort_order: sortOrder,
+                    page: currentPage,
+                    per_page: perPage,
+                },
+            });
 
-            const existing = groupedMap.get(key);
-
-            if (existing) {
-                existing.qty += qty;
-                continue;
-            }
-
-            groupedMap.set(key, {
-                id: key,
+            const mappedData = (response.data.data ?? []).map((item) => ({
+                id: String(item.id),
                 gudang_id: item.gudang_id,
                 nama_barang: item.nama_barang,
-                qty,
+                qty: Number(item.qty),
                 satuan_terkecil: item.satuan_terkecil,
-                harga_beli: hargaBeli,
+                harga_beli: Number(item.harga_beli),
                 gudang: item.gudang ?? null,
-            });
+            }));
+
+            setData(mappedData);
+            setMeta(response.data.meta ?? initialMeta);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoading(false);
         }
+    };
 
-        return Array.from(groupedMap.values());
-    }, [data]);
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
 
-    const filteredData = useMemo(() => {
-        let result = [...groupedData];
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
 
-        if (search) {
-            result = result.filter(
-                (item) =>
-                    item.nama_barang.toLowerCase().includes(search.toLowerCase()) ||
-                    item.gudang?.nama_gudang?.toLowerCase().includes(search.toLowerCase())
-            );
-        }
+    useEffect(() => {
+        void fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, sortField, sortOrder, currentPage]);
 
-        result.sort((a, b) => {
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
-
-            if (sortOrder === "asc") return aVal.localeCompare(bVal);
-            return bVal.localeCompare(aVal);
-        });
-
-        return result;
-    }, [groupedData, search, sortField, sortOrder]);
-
-    const totalPages = Math.ceil(filteredData.length / perPage);
-    const normalizedCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
-
-    const paginatedData = filteredData.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
-    );
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     const handleSort = (field: keyof Product) => {
         if (sortField === field) {
@@ -117,14 +121,17 @@ export default function Page() {
                 <h1 className="text-3xl font-bold">Stok Bahan Basah</h1>
             </div>
 
+            {errorMessage ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari barang atau gudang..."
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
             </div>
@@ -151,11 +158,11 @@ export default function Page() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.length > 0 ? (
-                            paginatedData.map((item, index) => (
+                        {data.length > 0 ? (
+                            data.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
@@ -179,7 +186,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={(meta.current_page || 1) === 1 || loading}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >
@@ -190,14 +197,15 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border border-white rounded-md ${normalizedCurrentPage === i + 1 ? "bg-primary text-white" : ""}`}
+                        disabled={loading}
+                        className={`px-3 py-1 border border-white rounded-md ${meta.current_page === i + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {i + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages || totalPages === 0}
+                    disabled={(meta.current_page || 1) === totalPages || totalPages === 0 || loading}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border border-white rounded-md"
                 >

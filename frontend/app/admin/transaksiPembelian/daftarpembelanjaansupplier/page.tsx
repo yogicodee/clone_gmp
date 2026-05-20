@@ -10,13 +10,24 @@ import api from "@/lib/api";
 import {
     ApiListResponse,
     DaftarPembelanjaan,
+    Meta,
     extractErrorMessage,
 } from "@/lib/transaksiPembelian";
+
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
 
 export default function Page() {
     const router = useRouter();
 
     const [data, setData] = useState<DaftarPembelanjaan[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -34,11 +45,20 @@ export default function Page() {
             setError("");
 
             const response = await api.get<ApiListResponse<DaftarPembelanjaan>>(
-                "/daftar-pembelanjaan",
-                { params: { per_page: 100 } }
+                "/daftar-pembelanjaan-supplier",
+                {
+                    params: {
+                        tanggal_pesan: filterDate || undefined,
+                        sort_field: "tanggal_pesan",
+                        sort_order: "desc",
+                        page: currentPage,
+                        per_page: perPage,
+                    },
+                }
             );
 
             setData(response.data.data ?? []);
+            setMeta(response.data.meta ?? initialMeta);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -48,31 +68,12 @@ export default function Page() {
 
     useEffect(() => {
         void fetchData();
-    }, []);
+    }, [currentPage, filterDate]);
 
     useEffect(() => {
         setCurrentPage(1);
     }, [filterDate]);
-
-    const filteredData = useMemo(() => {
-        if (!filterDate) {
-            return data;
-        }
-
-        return data.filter((item) => item.tanggal_pesan === filterDate);
-    }, [data, filterDate]);
-
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / perPage));
-    const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
-    );
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [currentPage, totalPages]);
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     async function handleCreate() {
         try {
@@ -138,20 +139,20 @@ export default function Page() {
                                     Memuat data...
                                 </td>
                             </tr>
-                        ) : paginatedData.length === 0 ? (
+                        ) : data.length === 0 ? (
                             <tr>
                                 <td colSpan={3} className="p-6 text-center text-gray-500">
                                     Belum ada data daftar pembelanjaan.
                                 </td>
                             </tr>
                         ) : (
-                            paginatedData.map((item, index) => (
+                            data.map((item, index) => (
                                 <tr
                                     key={item.id}
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {(currentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.tanggal_pesan}</td>
                                     <td className="p-3">

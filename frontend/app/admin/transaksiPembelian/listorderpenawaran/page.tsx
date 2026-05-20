@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import {
     ApiListResponse,
+    Meta,
     OrderPenawaran,
     SppgOption,
     extractErrorMessage,
@@ -29,11 +30,21 @@ const initialForm: FormType = {
     keterangan: "",
 };
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 export default function Page() {
     const router = useRouter();
 
     const [data, setData] = useState<OrderPenawaran[]>([]);
     const [sppgOptions, setSppgOptions] = useState<SppgOption[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -44,6 +55,7 @@ export default function Page() {
     const [openForm, setOpenForm] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<OrderPenawaran | null>(null);
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [sortField, setSortField] = useState<SortField>("tanggal_pesan");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -57,7 +69,13 @@ export default function Page() {
 
             const [ordersResponse, sppgResponse] = await Promise.all([
                 api.get<ApiListResponse<OrderPenawaran>>("/order-penawaran", {
-                    params: { per_page: 100 },
+                    params: {
+                        search: search || undefined,
+                        sort_field: sortField,
+                        sort_order: sortOrder,
+                        page: currentPage,
+                        per_page: perPage,
+                    },
                 }),
                 api.get<ApiListResponse<SppgOption>>("/sppg", {
                     params: { per_page: 100 },
@@ -65,6 +83,7 @@ export default function Page() {
             ]);
 
             setData(ordersResponse.data.data ?? []);
+            setMeta(ordersResponse.data.meta ?? initialMeta);
             setSppgOptions(sppgResponse.data.data ?? []);
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -74,12 +93,18 @@ export default function Page() {
     }
 
     useEffect(() => {
-        void fetchData();
-    }, []);
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
+        void fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, sortField, sortOrder, currentPage]);
 
     function resetForm() {
         setForm(initialForm);
@@ -151,49 +176,19 @@ export default function Page() {
             await api.delete(`/order-penawaran/${deleteTarget.id}`);
             setSuccess("Order penawaran berhasil dihapus.");
             setDeleteTarget(null);
-            await fetchData();
+
+            if (data.length === 1 && currentPage > 1) {
+                setCurrentPage((prev) => prev - 1);
+            } else {
+                await fetchData();
+            }
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
     }
-
-    const filteredData = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-
-        const result = data.filter((item) => {
-            if (!normalizedSearch) {
-                return true;
-            }
-
-            return (
-                item.nama_pembeli.toLowerCase().includes(normalizedSearch) ||
-                (item.keterangan ?? "").toLowerCase().includes(normalizedSearch)
-            );
-        });
-
-        result.sort((a, b) => {
-            const first = String(a[sortField] ?? "").toLowerCase();
-            const second = String(b[sortField] ?? "").toLowerCase();
-            const comparison = first.localeCompare(second);
-            return sortOrder === "asc" ? comparison : comparison * -1;
-        });
-
-        return result;
-    }, [data, search, sortField, sortOrder]);
-
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / perPage));
-    const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
-    );
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [currentPage, totalPages]);
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     return (
         <div className="p-6 space-y-6">
@@ -216,8 +211,8 @@ export default function Page() {
             <div className="flex items-center justify-between gap-4">
                 <input
                     placeholder="Cari nama pembeli / keterangan..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
                 />
 
@@ -273,20 +268,20 @@ export default function Page() {
                                     Memuat data...
                                 </td>
                             </tr>
-                        ) : paginatedData.length === 0 ? (
+                        ) : data.length === 0 ? (
                             <tr>
                                 <td colSpan={6} className="p-6 text-center text-gray-500">
                                     Belum ada data order penawaran.
                                 </td>
                             </tr>
                         ) : (
-                            paginatedData.map((item, index) => (
+                            data.map((item, index) => (
                                 <tr
                                     key={item.id}
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {(currentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                     </td>
                                     <td className="p-3">{item.tanggal_pesan}</td>
                                     <td className="p-3">{item.tanggal_dikirim ?? "-"}</td>
@@ -327,7 +322,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={(meta.current_page || 1) === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -338,14 +333,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${meta.current_page === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={(meta.current_page || 1) === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >

@@ -12,6 +12,7 @@ import {
     ApiListResponse,
     DaftarPembelanjaan,
     DaftarPembelanjaanItem,
+    Meta,
     SupplierOption,
     extractErrorMessage,
 } from "@/lib/transaksiPembelian";
@@ -20,6 +21,28 @@ type WarehouseStockItem = {
     nama_barang: string;
     qty: number | string;
     satuan_terkecil: string;
+};
+
+type SupplierSummary = {
+    supplier: SupplierOption;
+};
+
+type DaftarPembelanjaanSupplierDetailResponse = {
+    id: number;
+    tanggal_pesan: string;
+    suppliers: SupplierSummary[];
+    selected_supplier_id: number | null;
+    items: DaftarPembelanjaanItem[];
+    meta: Meta;
+};
+
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
 };
 
 function calculateKebutuhan(qty: number | string, stok: number | string) {
@@ -56,11 +79,13 @@ export default function Page() {
 
     const [detail, setDetail] = useState<DaftarPembelanjaan | null>(null);
     const [items, setItems] = useState<DaftarPembelanjaanItem[]>([]);
+    const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
     const [warehouseStockMap, setWarehouseStockMap] = useState<Record<string, number>>({});
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+    const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
 
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
@@ -74,8 +99,15 @@ export default function Page() {
             setError("");
 
             const [detailRes, supplierRes, stokKeringRes, stokBasahRes] = await Promise.all([
-                api.get<ApiDetailResponse<DaftarPembelanjaan>>(
-                    `/daftar-pembelanjaan/${daftarPembelanjaanId}`
+                api.get<ApiDetailResponse<DaftarPembelanjaanSupplierDetailResponse>>(
+                    `/daftar-pembelanjaan-supplier/${daftarPembelanjaanId}`,
+                    {
+                        params: {
+                            supplier_id: selectedSupplierId || undefined,
+                            page: currentPage,
+                            per_page: perPage,
+                        },
+                    }
                 ),
                 api.get<ApiListResponse<SupplierOption>>("/supplier", {
                     params: { per_page: 100 },
@@ -90,8 +122,14 @@ export default function Page() {
 
             const data = detailRes.data.data;
 
-            setDetail(data);
+            setDetail({
+                id: data.id,
+                tanggal_pesan: data.tanggal_pesan,
+            });
             setItems(data.items ?? []);
+            setSuppliers(data.suppliers ?? []);
+            setMeta(data.meta ?? initialMeta);
+            setSelectedSupplierId((prev) => prev ?? data.selected_supplier_id ?? null);
             setSupplierOptions(supplierRes.data.data ?? []);
 
             const stockMap: Record<string, number> = {};
@@ -111,7 +149,7 @@ export default function Page() {
         } finally {
             setLoading(false);
         }
-    }, [daftarPembelanjaanId]);
+    }, [currentPage, daftarPembelanjaanId, perPage, selectedSupplierId]);
 
     const itemsWithSupplier = useMemo(() => {
         return items.map((item) => {
@@ -141,40 +179,15 @@ export default function Page() {
         }
     }, [daftarPembelanjaanId, fetchData]);
 
-    /* ================= SUPPLIER LIST ================= */
-    const suppliers = useMemo(() => {
-        const map = new Map<string, { nama_supplier: string }>();
-
-        itemsWithSupplier.forEach((item) => {
-            if (item.nama_supplier && !map.has(item.nama_supplier)) {
-                map.set(item.nama_supplier, {
-                    nama_supplier: item.nama_supplier,
-                });
-            }
-        });
-
-        return Array.from(map.values());
-    }, [itemsWithSupplier]);
-
-    /* ================= DEFAULT SUPPLIER ================= */
-    const activeSelectedSupplier = selectedSupplier ?? suppliers[0]?.nama_supplier ?? null;
-
-    /* ================= FILTER + KEBUTUHAN ================= */
-    const filteredItems = useMemo(() => {
-        return itemsWithSupplier.filter((item) => {
-            if (!activeSelectedSupplier) return true;
-            return item.nama_supplier === activeSelectedSupplier;
-        });
-    }, [activeSelectedSupplier, itemsWithSupplier]);
-
-    /* ================= PAGINATION ================= */
-    const totalPages = Math.max(1, Math.ceil(filteredItems.length / perPage));
-    const normalizedCurrentPage = Math.min(currentPage, totalPages);
-
-    const paginatedItems = filteredItems.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
+    const activeSelectedSupplier = useMemo(
+        () =>
+            suppliers.find((group) => group.supplier.id === selectedSupplierId)?.supplier.nama
+            ?? suppliers[0]?.supplier.nama
+            ?? null,
+        [selectedSupplierId, suppliers]
     );
+
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     // Export PDF
     function handleExportPDF() {
@@ -191,7 +204,7 @@ export default function Page() {
         doc.text(`Tanggal Pesan: ${tanggal}`, 14, 22);
         doc.text(`Supplier: ${activeSelectedSupplier ?? "Semua"}`, 14, 28);
 
-        const tableData = filteredItems.map((item, index) => [
+        const tableData = itemsWithSupplier.map((item, index) => [
             index + 1,
             item.nama_barang,
             item.qty,
@@ -269,17 +282,17 @@ export default function Page() {
                     <div className="space-y-2">
                         {suppliers.map((sup) => (
                             <div
-                                key={sup.nama_supplier}
+                                key={sup.supplier.id}
                                 onClick={() => {
-                                    setSelectedSupplier(sup.nama_supplier);
+                                    setSelectedSupplierId(sup.supplier.id);
                                     setCurrentPage(1);
                                 }}
-                                className={`p-3 rounded-md cursor-pointer border ${activeSelectedSupplier === sup.nama_supplier
+                                className={`p-3 rounded-md cursor-pointer border ${selectedSupplierId === sup.supplier.id
                                     ? "bg-lime-200 border-green-500"
                                     : "hover:bg-gray-100"
                                     }`}
                             >
-                                {sup.nama_supplier}
+                                {sup.supplier.nama}
                             </div>
                         ))}
                     </div>
@@ -318,17 +331,17 @@ export default function Page() {
                                         Loading...
                                     </td>
                                 </tr>
-                            ) : paginatedItems.length === 0 ? (
+                            ) : itemsWithSupplier.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="p-4 text-center">
                                         Tidak ada data
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedItems.map((item, index) => (
+                                itemsWithSupplier.map((item, index) => (
                                     <tr key={item.id} className="border-t">
                                         <td className="p-2 text-center">
-                                            {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                            {((meta.current_page || 1) - 1) * perPage + index + 1}
                                         </td>
                                         <td className="p-2">{item.nama_barang}</td>
                                         <td className="p-2 text-center">{item.qty}</td>
@@ -346,7 +359,7 @@ export default function Page() {
                     {/* PAGINATION */}
                     <div className="flex justify-end gap-2 mt-4">
                         <button
-                            disabled={normalizedCurrentPage === 1}
+                            disabled={currentPage === 1}
                             onClick={() => setCurrentPage((prev) => prev - 1)}
                             className="px-3 py-1 border rounded-md disabled:opacity-50"
                         >
@@ -357,7 +370,7 @@ export default function Page() {
                             <button
                                 key={i}
                                 onClick={() => setCurrentPage(i + 1)}
-                                className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === i + 1 ? "bg-blue-500 text-white" : ""
+                                className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-blue-500 text-white" : ""
                                     }`}
                             >
                                 {i + 1}
@@ -365,7 +378,7 @@ export default function Page() {
                         ))}
 
                         <button
-                            disabled={normalizedCurrentPage === totalPages}
+                            disabled={currentPage === totalPages}
                             onClick={() => setCurrentPage((prev) => prev + 1)}
                             className="px-3 py-1 border rounded-md disabled:opacity-50"
                         >

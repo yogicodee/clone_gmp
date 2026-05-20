@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\MasterData\Wilayah;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class WilayahController extends Controller
 {
@@ -72,7 +74,7 @@ class WilayahController extends Controller
 
     public function update(Request $request, Wilayah $wilayah): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $wilayah);
 
         $wilayah->update($payload);
 
@@ -94,11 +96,30 @@ class WilayahController extends Controller
     /**
      * @return array{nama: string, alamat: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Wilayah $wilayah = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama' => ['required', 'string', 'max:100'],
             'alamat' => ['required', 'string'],
         ]);
+
+        $normalizedNama = Str::lower(trim($payload['nama']));
+        $normalizedAlamat = Str::lower(trim($payload['alamat']));
+
+        $isDuplicate = Wilayah::query()
+            ->when($wilayah !== null, fn ($query) => $query->where('id', '!=', $wilayah->id))
+            ->get()
+            ->contains(function (Wilayah $item) use ($normalizedNama, $normalizedAlamat): bool {
+                return Str::lower(trim((string) $item->nama)) === $normalizedNama
+                    && Str::lower(trim((string) $item->alamat)) === $normalizedAlamat;
+            });
+
+        if ($isDuplicate) {
+            throw ValidationException::withMessages([
+                'nama' => 'Wilayah dengan nama dan alamat yang sama sudah ada.',
+            ]);
+        }
+
+        return $payload;
     }
 }

@@ -7,6 +7,7 @@ use App\Models\MasterData\Supplier;
 use App\Models\TransaksiPembelian\DaftarPembelanjaan;
 use App\Models\TransaksiPembelian\DaftarPembelanjaanItem;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -25,19 +26,69 @@ class DaftarPembelanjaanItemController extends Controller
         $sortField = $filters['sort_field'] ?? 'nama_barang';
         $sortOrder = $filters['sort_order'] ?? 'asc';
         $perPage = $filters['per_page'] ?? 10;
+        $currentPage = max((int) $request->query('page', 1), 1);
 
-        $items = $daftarPembelanjaan->items()
+        $groupedItems = $daftarPembelanjaan->items()
             ->with(['produk', 'kategori', 'supplier'])
-            ->when($search, function ($query, string $keyword) {
-                $query->where(function ($subQuery) use ($keyword): void {
-                    $subQuery
-                        ->where('nama_barang', 'like', '%'.$keyword.'%')
-                        ->orWhere('nama_supplier', 'like', '%'.$keyword.'%');
+            ->get()
+            ->groupBy(fn (DaftarPembelanjaanItem $item): string => mb_strtolower(trim($item->nama_barang)))
+            ->map(function ($items) {
+                /** @var DaftarPembelanjaanItem $firstItem */
+                $firstItem = $items->first();
+
+                $aggregatedQty = $items->sum(fn (DaftarPembelanjaanItem $item): float => (float) $item->qty);
+
+                return [
+                    'id' => $firstItem->id,
+                    'produk_id' => $firstItem->produk_id,
+                    'kategori_id' => $firstItem->kategori_id,
+                    'supplier_id' => $firstItem->supplier_id,
+                    'nama_barang' => $firstItem->nama_barang,
+                    'qty' => $aggregatedQty,
+                    'satuan' => $firstItem->satuan,
+                    'stok' => $firstItem->stok,
+                    'kebutuhan' => $firstItem->kebutuhan,
+                    'nama_supplier' => $firstItem->nama_supplier,
+                    'keterangan' => $firstItem->keterangan,
+                    'produk' => $firstItem->produk,
+                    'kategori' => $firstItem->kategori,
+                    'supplier' => $firstItem->supplier,
+                ];
+            })
+            ->when($search, function ($collection, string $keyword) {
+                $normalizedKeyword = mb_strtolower(trim($keyword));
+
+                return $collection->filter(function (array $item) use ($normalizedKeyword): bool {
+                    return str_contains(mb_strtolower($item['nama_barang']), $normalizedKeyword)
+                        || str_contains(mb_strtolower($item['nama_supplier'] ?? ''), $normalizedKeyword);
                 });
             })
-            ->orderBy($sortField, $sortOrder)
-            ->paginate($perPage)
-            ->withQueryString();
+            ->sort(function (array $first, array $second) use ($sortField, $sortOrder): int {
+                $firstValue = $first[$sortField] ?? null;
+                $secondValue = $second[$sortField] ?? null;
+
+                if (in_array($sortField, ['qty', 'stok', 'kebutuhan'], true)) {
+                    $comparison = (float) $firstValue <=> (float) $secondValue;
+
+                    return $sortOrder === 'asc' ? $comparison : -$comparison;
+                }
+
+                $comparison = strnatcasecmp((string) $firstValue, (string) $secondValue);
+
+                return $sortOrder === 'asc' ? $comparison : -$comparison;
+            })
+            ->values();
+
+        $items = new LengthAwarePaginator(
+            $groupedItems->forPage($currentPage, $perPage)->values()->all(),
+            $groupedItems->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
         return response()->json([
             'message' => 'Data detail pembelanjaan berhasil diambil.',

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown, Circle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
-import { extractErrorMessage } from "@/lib/transaksiPembelian";
+import {
+    extractErrorMessage,
+    type ApiListResponse,
+    type Meta,
+} from "@/lib/transaksiPembelian";
 import axios from "axios";
 
 /* ================= TYPE ================= */
@@ -22,8 +25,19 @@ type Product = {
 type FormType = Omit<Product, "id">;
 type FieldErrors = Partial<Record<keyof FormType, string>>;
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 export default function Page() {
-    const { data, refetch } = useFetch<Product>("/karyawan");
+    const [data, setData] = useState<Product[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
+    const [loading, setLoading] = useState(true);
 
     const [form, setForm] = useState<FormType>({
         nama: "",
@@ -51,6 +65,7 @@ export default function Page() {
     const [successMessage, setSuccessMessage] = useState("");
 
     /* ================= FILTER ================= */
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
 
     /* ================= SORT ================= */
@@ -62,6 +77,43 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= HANDLE ================= */
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            setErrorMessage("");
+
+            const response = await api.get<ApiListResponse<Product>>("/karyawan", {
+                params: {
+                    search: search || undefined,
+                    sort_field: sortField,
+                    sort_order: sortOrder,
+                    page: currentPage,
+                    per_page: perPage,
+                },
+            });
+
+            setData(response.data.data ?? []);
+            setMeta(response.data.meta ?? initialMeta);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
+
+    useEffect(() => {
+        void fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, sortField, sortOrder, currentPage]);
 
     const handleSubmit = async () => {
         const nextFieldErrors: FieldErrors = {};
@@ -96,8 +148,8 @@ export default function Page() {
                 setSuccessMessage("Karyawan berhasil ditambahkan.");
             }
 
-            await refetch();
             resetForm();
+            await fetchData();
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 const apiErrors = error.response?.data?.errors;
@@ -138,10 +190,15 @@ export default function Page() {
 
         try {
             await api.delete(`/karyawan/${deleteId}`);
-            await refetch();
             setDeleteId(null);
             setErrorMessage("");
             setSuccessMessage("Karyawan berhasil dihapus.");
+
+            if (data.length === 1 && currentPage > 1) {
+                setCurrentPage((prev) => prev - 1);
+            } else {
+                await fetchData();
+            }
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
             setSuccessMessage("");
@@ -171,48 +228,8 @@ export default function Page() {
         }
     };
 
-    /* ================= FILTER + SORT ================= */
-
-    const filteredData = useMemo(() => {
-        let result = [...data];
-
-        if (search) {
-            result = result.filter(
-                (item) =>
-                    item.nama.toLowerCase().includes(search.toLowerCase()) ||
-                    item.jabatan.toLowerCase().includes(search.toLowerCase())
-            );
-        }
-
-        result.sort((a, b) => {
-            const aVal = String(a[sortField]).toLowerCase();
-            const bVal = String(b[sortField]).toLowerCase();
-
-            if (sortOrder === "asc") return aVal.localeCompare(bVal);
-            return bVal.localeCompare(aVal);
-        });
-
-        return result;
-    }, [data, search, sortField, sortOrder]);
-
     /* ================= PAGINATION ================= */
-
-    const totalPages = Math.ceil(filteredData.length / perPage);
-
-    const paginatedData = filteredData.slice(
-        (currentPage - 1) * perPage,
-        currentPage * perPage
-    );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search]);
-
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(1);
-        }
-    }, [filteredData]);
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     return (
         <div className="p-6 space-y-6">
@@ -235,8 +252,8 @@ export default function Page() {
             <div className="flex items-center justify-between">
                 <input
                     placeholder="Cari nama atau jabatan..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 bg-white shadow"
                 />
 
@@ -293,10 +310,10 @@ export default function Page() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((item, index) => (
+                        {data.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {(currentPage - 1) * perPage + index + 1}
+                                    {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                 </td>
                                 <td className="p-3">{item.nama}</td>
                                 <td className="p-3">{item.alamat}</td>
@@ -343,7 +360,7 @@ export default function Page() {
             {/* PAGINATION */}
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={currentPage === 1}
+                    disabled={(meta.current_page || 1) === 1 || loading}
                     onClick={() => setCurrentPage((p) => p - 1)}
                     className="px-3 py-1 border rounded-md"
                 >
@@ -354,7 +371,8 @@ export default function Page() {
                     <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`px-3 py-1 border rounded-md ${currentPage === i + 1 ? "bg-primary text-white" : ""
+                        disabled={loading}
+                        className={`px-3 py-1 border rounded-md ${meta.current_page === i + 1 ? "bg-primary text-white" : ""
                             }`}
                     >
                         {i + 1}
@@ -362,7 +380,7 @@ export default function Page() {
                 ))}
 
                 <button
-                    disabled={currentPage === totalPages}
+                    disabled={(meta.current_page || 1) === totalPages || totalPages === 0 || loading}
                     onClick={() => setCurrentPage((p) => p + 1)}
                     className="px-3 py-1 border rounded-md"
                 >

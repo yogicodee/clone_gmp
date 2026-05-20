@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TransaksiPembelian\DaftarPembelanjaan;
 use App\Models\TransaksiPembelian\DaftarPembelanjaanItem;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -52,9 +53,17 @@ class DaftarPembelanjaanSupplierController extends Controller
 
     public function show(DaftarPembelanjaan $daftarPembelanjaan): JsonResponse
     {
+        $filters = request()->validate([
+            'supplier_id' => ['nullable', 'integer'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $currentPage = max((int) request()->query('page', 1), 1);
+        $perPage = $filters['per_page'] ?? 10;
+
         $daftarPembelanjaan->load(['items.produk', 'items.kategori', 'items.supplier']);
 
-        $suppliers = $daftarPembelanjaan->items
+        $supplierGroups = $daftarPembelanjaan->items
             ->filter(fn (DaftarPembelanjaanItem $item) => $item->supplier !== null)
             ->groupBy('supplier_id')
             ->map(function ($items): array {
@@ -72,15 +81,49 @@ class DaftarPembelanjaanSupplierController extends Controller
                     'items' => $items->map(fn (DaftarPembelanjaanItem $item): array => $this->transformItem($item))->values()->all(),
                 ];
             })
-            ->values()
-            ->all();
+            ->values();
+
+        $selectedSupplierId = (int) ($filters['supplier_id'] ?? ($supplierGroups->first()['supplier']['id'] ?? 0));
+
+        $selectedGroup = $supplierGroups
+            ->first(fn (array $group): bool => (int) $group['supplier']['id'] === $selectedSupplierId);
+
+        if ($selectedGroup === null) {
+            $selectedSupplierId = (int) ($supplierGroups->first()['supplier']['id'] ?? 0);
+            $selectedGroup = $supplierGroups->first();
+        }
+
+        $selectedItems = collect($selectedGroup['items'] ?? [])->values();
+
+        $paginatedItems = new LengthAwarePaginator(
+            $selectedItems->forPage($currentPage, $perPage)->values()->all(),
+            $selectedItems->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => request()->url(),
+                'query' => request()->query(),
+            ]
+        );
 
         return response()->json([
             'message' => 'Detail daftar pembelanjaan supplier berhasil diambil.',
             'data' => [
                 'id' => $daftarPembelanjaan->id,
                 'tanggal_pesan' => $daftarPembelanjaan->tanggal_pesan,
-                'suppliers' => $suppliers,
+                'suppliers' => $supplierGroups->map(fn (array $group): array => [
+                    'supplier' => $group['supplier'],
+                ])->values()->all(),
+                'selected_supplier_id' => $selectedSupplierId ?: null,
+                'items' => $paginatedItems->items(),
+                'meta' => [
+                    'current_page' => $paginatedItems->currentPage(),
+                    'last_page' => $paginatedItems->lastPage(),
+                    'per_page' => $paginatedItems->perPage(),
+                    'total' => $paginatedItems->total(),
+                    'from' => $paginatedItems->firstItem(),
+                    'to' => $paginatedItems->lastItem(),
+                ],
             ],
         ]);
     }

@@ -11,6 +11,7 @@ import {
     ApiListResponse,
     DaftarPembelanjaan,
     DaftarPembelanjaanItem,
+    Meta,
     SupplierOption,
     extractErrorMessage,
 } from "@/lib/transaksiPembelian";
@@ -51,6 +52,15 @@ function createStockKey(namaBarang: string, satuan: string) {
     return `${namaBarang.trim().toLowerCase()}|${normalizeUnit(satuan)}`;
 }
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 export default function Page() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
@@ -60,11 +70,13 @@ export default function Page() {
     const [items, setItems] = useState<DaftarPembelanjaanItem[]>([]);
     const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
     const [warehouseStockMap, setWarehouseStockMap] = useState<Record<string, number>>({});
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [editTarget, setEditTarget] = useState<DaftarPembelanjaanItem | null>(null);
     const [form, setForm] = useState<EditForm>({ supplier_id: "" });
@@ -76,9 +88,19 @@ export default function Page() {
             setLoading(true);
             setError("");
 
-            const [detailResponse, supplierResponse, stokKeringResponse, stokBasahResponse] = await Promise.all([
+            const [detailResponse, itemsResponse, supplierResponse, stokKeringResponse, stokBasahResponse] = await Promise.all([
                 api.get<ApiDetailResponse<DaftarPembelanjaan>>(
                     `/daftar-pembelanjaan/${daftarPembelanjaanId}`
+                ),
+                api.get<ApiListResponse<DaftarPembelanjaanItem>>(
+                    `/daftar-pembelanjaan/${daftarPembelanjaanId}/items`,
+                    {
+                        params: {
+                            search: search || undefined,
+                            page: currentPage,
+                            per_page: perPage,
+                        },
+                    }
                 ),
                 api.get<ApiListResponse<SupplierOption>>("/supplier", {
                     params: { per_page: 100 },
@@ -93,7 +115,8 @@ export default function Page() {
 
             const detailData = detailResponse.data.data;
             setDetail(detailData);
-            setItems(detailData.items ?? []);
+            setItems(itemsResponse.data.data ?? []);
+            setMeta(itemsResponse.data.meta ?? initialMeta);
             setSupplierOptions(supplierResponse.data.data ?? []);
 
             const stockMap: Record<string, number> = {};
@@ -113,7 +136,16 @@ export default function Page() {
         } finally {
             setLoading(false);
         }
-    }, [daftarPembelanjaanId]);
+    }, [currentPage, daftarPembelanjaanId, perPage, search]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
 
     useEffect(() => {
         if (!Number.isNaN(daftarPembelanjaanId)) {
@@ -122,55 +154,23 @@ export default function Page() {
         }
     }, [daftarPembelanjaanId, fetchData]);
 
-    const groupedItems = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-
-        const map = new Map<string, DaftarPembelanjaanItem>();
-
-        for (const item of items) {
-            const key = item.nama_barang.toLowerCase();
-
-            if (normalizedSearch) {
-                const match =
-                    item.nama_barang.toLowerCase().includes(normalizedSearch) ||
-                    (item.nama_supplier ?? "").toLowerCase().includes(normalizedSearch);
-
-                if (!match) continue;
-            }
-
-            if (!map.has(key)) {
+    const displayItems = useMemo(
+        () =>
+            items.map((item) => {
                 const stok = warehouseStockMap[createStockKey(item.nama_barang, item.satuan)] ?? 0;
                 const qty = Number(item.qty);
 
-                map.set(key, {
+                return {
                     ...item,
                     qty,
                     stok,
                     kebutuhan: calculateKebutuhan(qty, stok),
-                });
-            } else {
-                const existing = map.get(key)!;
-                const qty = Number(existing.qty) + Number(item.qty);
-
-                map.set(key, {
-                    ...existing,
-                    qty,
-                    stok: existing.stok,
-                    kebutuhan: calculateKebutuhan(qty, existing.stok),
-                });
-            }
-        }
-
-        return Array.from(map.values());
-    }, [items, search, warehouseStockMap]);
-
-    const totalPages = Math.max(1, Math.ceil(groupedItems.length / perPage));
-    const normalizedCurrentPage = Math.min(currentPage, totalPages);
-
-    const paginatedItems = groupedItems.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
+                };
+            }),
+        [items, warehouseStockMap]
     );
+
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     function openEditModal(item: DaftarPembelanjaanItem) {
         setEditTarget(item);
@@ -250,11 +250,8 @@ export default function Page() {
 
             <input
                 placeholder="Cari barang / supplier..."
-                value={search}
-                onChange={(e) => {
-                    setSearch(e.target.value);
-                    setCurrentPage(1);
-                }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
             />
 
@@ -279,20 +276,20 @@ export default function Page() {
                                     Memuat data...
                                 </td>
                             </tr>
-                        ) : paginatedItems.length === 0 ? (
+                        ) : displayItems.length === 0 ? (
                             <tr>
                                 <td colSpan={8} className="p-6 text-center text-gray-500">
                                     Belum ada item daftar pembelanjaan.
                                 </td>
                             </tr>
                         ) : (
-                            paginatedItems.map((item, index) => (
+                            displayItems.map((item, index) => (
                                 <tr
                                     key={item.id}
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3 text-center">{item.qty}</td>
@@ -319,7 +316,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={currentPage === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -330,14 +327,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages}
+                    disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >

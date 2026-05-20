@@ -10,6 +10,7 @@ import {
     ApiDetailResponse,
     ApiListResponse,
     KategoriOption,
+    Meta,
     OrderPenawaran,
     OrderPenawaranItem,
     ProdukOption,
@@ -41,6 +42,15 @@ const initialForm: FormType = {
     keterangan: "",
 };
 
+const initialMeta: Meta = {
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: null,
+    to: null,
+};
+
 function formatQty(value: number | string): string {
     const numericValue = Number(value);
 
@@ -65,6 +75,7 @@ export default function Page() {
     const [items, setItems] = useState<OrderPenawaranItem[]>([]);
     const [produkOptions, setProdukOptions] = useState<ProdukOption[]>([]);
     const [kategoriOptions, setKategoriOptions] = useState<KategoriOption[]>([]);
+    const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -76,6 +87,7 @@ export default function Page() {
     const [deleteTarget, setDeleteTarget] = useState<OrderPenawaranItem | null>(null);
     const [openForm, setOpenForm] = useState(false);
 
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [sortField, setSortField] = useState<SortField>("nama_barang");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -91,7 +103,13 @@ export default function Page() {
                 await Promise.all([
                     api.get<ApiDetailResponse<OrderPenawaran>>(`/order-penawaran/${orderId}`),
                     api.get<ApiListResponse<OrderPenawaranItem>>(`/order-penawaran/${orderId}/items`, {
-                        params: { per_page: 100 },
+                        params: {
+                            search: search || undefined,
+                            sort_field: sortField,
+                            sort_order: sortOrder,
+                            page: currentPage,
+                            per_page: perPage,
+                        },
                     }),
                     api.get<ApiListResponse<ProdukOption>>("/produk", {
                         params: { per_page: 100 },
@@ -103,6 +121,7 @@ export default function Page() {
 
             setOrder(detailResponse.data.data);
             setItems(itemsResponse.data.data ?? []);
+            setMeta(itemsResponse.data.meta ?? initialMeta);
             setProdukOptions(produkResponse.data.data ?? []);
             setKategoriOptions(kategoriResponse.data.data ?? []);
         } catch (err) {
@@ -110,7 +129,16 @@ export default function Page() {
         } finally {
             setLoading(false);
         }
-    }, [orderId]);
+    }, [currentPage, orderId, perPage, search, sortField, sortOrder]);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+            setCurrentPage(1);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
 
     useEffect(() => {
         if (!Number.isNaN(orderId)) {
@@ -269,44 +297,19 @@ export default function Page() {
             await api.delete(`/order-penawaran/${orderId}/items/${deleteTarget.id}`);
             setSuccess("Barang berhasil dihapus dari order penawaran.");
             setDeleteTarget(null);
-            await fetchData();
+
+            if (items.length === 1 && currentPage > 1) {
+                setCurrentPage((prev) => prev - 1);
+            } else {
+                await fetchData();
+            }
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
     }
-
-    const filteredItems = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-
-        const result = items.filter((item) => {
-            if (!normalizedSearch) {
-                return true;
-            }
-
-            return (
-                item.nama_barang.toLowerCase().includes(normalizedSearch) ||
-                (item.keterangan ?? "").toLowerCase().includes(normalizedSearch)
-            );
-        });
-
-        result.sort((a, b) => {
-            const first = String(a[sortField] ?? "").toLowerCase();
-            const second = String(b[sortField] ?? "").toLowerCase();
-            const comparison = first.localeCompare(second, "id", { numeric: true });
-            return sortOrder === "asc" ? comparison : comparison * -1;
-        });
-
-        return result;
-    }, [items, search, sortField, sortOrder]);
-
-    const totalPages = Math.max(1, Math.ceil(filteredItems.length / perPage));
-    const normalizedCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedItems = filteredItems.slice(
-        (normalizedCurrentPage - 1) * perPage,
-        normalizedCurrentPage * perPage
-    );
+    const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     return (
         <div className="p-6 space-y-6">
@@ -343,11 +346,8 @@ export default function Page() {
             <div className="flex items-center justify-between gap-4">
                 <input
                     placeholder="Cari barang atau keterangan..."
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="border p-2 rounded-md w-1/4 min-w-60 bg-white shadow"
                 />
 
@@ -411,20 +411,20 @@ export default function Page() {
                                     Memuat data...
                                 </td>
                             </tr>
-                        ) : paginatedItems.length === 0 ? (
+                        ) : items.length === 0 ? (
                             <tr>
                                 <td colSpan={7} className="p-6 text-center text-gray-500">
                                     Belum ada barang pada order ini.
                                 </td>
                             </tr>
                         ) : (
-                            paginatedItems.map((item, index) => (
+                            items.map((item, index) => (
                                 <tr
                                     key={item.id}
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {(normalizedCurrentPage - 1) * perPage + index + 1}
+                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3">{formatQty(item.qty)}</td>
@@ -456,7 +456,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={normalizedCurrentPage === 1}
+                    disabled={currentPage === 1}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
@@ -467,14 +467,14 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        className={`px-3 py-1 border rounded-md ${normalizedCurrentPage === index + 1 ? "bg-primary text-white" : ""}`}
+                        className={`px-3 py-1 border rounded-md ${currentPage === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
                     </button>
                 ))}
 
                 <button
-                    disabled={normalizedCurrentPage === totalPages}
+                    disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="px-3 py-1 border rounded-md disabled:opacity-50"
                 >
