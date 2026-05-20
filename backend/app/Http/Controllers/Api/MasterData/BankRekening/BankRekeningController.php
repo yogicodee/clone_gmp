@@ -74,7 +74,7 @@ class BankRekeningController extends Controller
 
     public function update(Request $request, BankRekening $bankRekening): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $bankRekening);
 
         $bankRekening->update($payload);
 
@@ -96,9 +96,9 @@ class BankRekeningController extends Controller
     /**
      * @return array{nama_bank: string, no_rek: string, atas_nama: string, cabang: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?BankRekening $ignoreBankRekening = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama_bank' => ['required', 'string', 'max:100'],
             'no_rek' => ['required', 'string', 'min:5', 'max:50', 'regex:/^[0-9]+$/'],
             'atas_nama' => ['required', 'string', 'max:100'],
@@ -108,5 +108,44 @@ class BankRekeningController extends Controller
             'no_rek.min' => 'No rekening minimal 5 digit.',
             'no_rek.max' => 'No rekening maksimal 50 digit.',
         ]);
+
+        $normalizedNamaBank = mb_strtolower(trim($payload['nama_bank']));
+        $normalizedNoRek = trim($payload['no_rek']);
+        $normalizedAtasNama = mb_strtolower(trim($payload['atas_nama']));
+        $normalizedCabang = mb_strtolower(trim($payload['cabang']));
+
+        $query = BankRekening::query()
+            ->when($ignoreBankRekening !== null, fn ($builder) => $builder->whereKeyNot($ignoreBankRekening->id));
+
+        $duplicateNoRek = (clone $query)
+            ->where('no_rek', $normalizedNoRek)
+            ->exists();
+
+        if ($duplicateNoRek) {
+            abort(response()->json([
+                'message' => 'Nomor rekening sudah digunakan.',
+                'errors' => [
+                    'no_rek' => ['Nomor rekening sudah digunakan.'],
+                ],
+            ], 422));
+        }
+
+        $duplicateExists = (clone $query)
+            ->whereRaw('LOWER(TRIM(nama_bank)) = ?', [$normalizedNamaBank])
+            ->where('no_rek', $normalizedNoRek)
+            ->whereRaw('LOWER(TRIM(atas_nama)) = ?', [$normalizedAtasNama])
+            ->whereRaw('LOWER(TRIM(cabang)) = ?', [$normalizedCabang])
+            ->exists();
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Bank dan rekening dengan data yang sama sudah ada.',
+                'errors' => [
+                    'nama_bank' => ['Bank dan rekening dengan data yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
     }
 }
