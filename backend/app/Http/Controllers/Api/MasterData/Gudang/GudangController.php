@@ -74,7 +74,7 @@ class GudangController extends Controller
 
     public function update(Request $request, Gudang $gudang): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $gudang);
 
         $gudang->update($payload);
 
@@ -96,9 +96,9 @@ class GudangController extends Controller
     /**
      * @return array{nama_gudang: string, alamat: string, nama_pic: string, no_pic: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Gudang $ignoreGudang = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama_gudang' => ['required', 'string', 'max:100'],
             'alamat' => ['required', 'string'],
             'nama_pic' => ['required', 'string', 'max:100'],
@@ -108,5 +108,36 @@ class GudangController extends Controller
             'no_pic.min' => 'No PIC minimal 10 karakter.',
             'no_pic.max' => 'No PIC maksimal 20 karakter.',
         ]);
+
+        $normalizedNamaGudang = mb_strtolower(trim($payload['nama_gudang']));
+        $normalizedAlamat = mb_strtolower(trim($payload['alamat']));
+        $normalizedNamaPic = mb_strtolower(trim($payload['nama_pic']));
+        $normalizedNoPic = $this->normalizePhone($payload['no_pic']);
+
+        $duplicateExists = Gudang::query()
+            ->when($ignoreGudang !== null, fn ($query) => $query->whereKeyNot($ignoreGudang->id))
+            ->whereRaw('LOWER(TRIM(nama_gudang)) = ?', [$normalizedNamaGudang])
+            ->whereRaw('LOWER(TRIM(alamat)) = ?', [$normalizedAlamat])
+            ->whereRaw('LOWER(TRIM(nama_pic)) = ?', [$normalizedNamaPic])
+            ->get()
+            ->contains(function (Gudang $gudang) use ($normalizedNoPic): bool {
+                return $this->normalizePhone((string) $gudang->no_pic) === $normalizedNoPic;
+            });
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Gudang dengan nama, alamat, PIC, dan no PIC yang sama sudah ada.',
+                'errors' => [
+                    'nama_gudang' => ['Gudang dengan nama, alamat, PIC, dan no PIC yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
+    }
+
+    private function normalizePhone(string $value): string
+    {
+        return preg_replace('/\D+/', '', trim($value)) ?? '';
     }
 }
