@@ -100,6 +100,7 @@ export default function Page() {
     const [items, setItems] = useState<PenjualanItem[]>([]);
     const [opsiBarang, setOpsiBarang] = useState<OpsiBarang[]>([]);
     const [gudangOptions, setGudangOptions] = useState<GudangOption[]>([]);
+    const [loadingOptions, setLoadingOptions] = useState(false);
     const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -124,7 +125,7 @@ export default function Page() {
             setLoading(true);
             setErrorMessage("");
 
-            const [detailResponse, itemsResponse, opsiResponse, gudangResponse] = await Promise.all([
+            const [detailResponse, itemsResponse] = await Promise.all([
                 api.get(`/penjualan/${penjualanId}`),
                 api.get<ApiListResponse<PenjualanItem>>(`/penjualan/${penjualanId}/items`, {
                     params: {
@@ -135,21 +136,37 @@ export default function Page() {
                         per_page: perPage,
                     },
                 }),
-                api.get(`/penjualan/${penjualanId}/opsi-barang`),
-                api.get("/gudang", { params: { per_page: 100 } }),
             ]);
 
             setDetail(detailResponse.data.data);
             setItems(itemsResponse.data.data ?? []);
             setMeta(itemsResponse.data.meta ?? initialMeta);
-            setOpsiBarang(opsiResponse.data.data ?? []);
-            setGudangOptions(gudangResponse.data.data ?? []);
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
         } finally {
             setLoading(false);
         }
     }, [currentPage, penjualanId, perPage, search, sortField, sortOrder]);
+
+    const fetchFormOptions = useCallback(async () => {
+        if (loadingOptions) return;
+        if (opsiBarang.length > 0 && gudangOptions.length > 0) return;
+
+        try {
+            setLoadingOptions(true);
+            const [opsiResponse, gudangResponse] = await Promise.all([
+                api.get(`/penjualan/${penjualanId}/opsi-barang`),
+                api.get("/gudang", { params: { per_page: 100 } }),
+            ]);
+
+            setOpsiBarang(opsiResponse.data.data ?? []);
+            setGudangOptions(gudangResponse.data.data ?? []);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoadingOptions(false);
+        }
+    }, [gudangOptions.length, loadingOptions, opsiBarang.length, penjualanId]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -182,6 +199,7 @@ export default function Page() {
         setErrorMessage("");
         setSuccessMessage("");
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const clearFieldError = (field: keyof FormType) => {
@@ -204,6 +222,7 @@ export default function Page() {
         setFieldErrors({});
         setErrorMessage("");
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleSubmit = async () => {
@@ -367,7 +386,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id" as any)} className="flex items-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
                                     Barang <ArrowUpDown size={14} />
@@ -402,7 +425,7 @@ export default function Page() {
                         ) : items.length > 0 ? (
                             items.map((item, index) => (
                                 <tr key={`${item.penjualan_id ?? "source"}-${item.id}`} className="border-t border-primary/20 hover:bg-white/50">
-                                    <td className="p-3 text-center">{((meta.current_page || 1) - 1) * perPage + index + 1}</td>
+                                    <td className="p-3 text-center">{sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}</td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
                                     <td className="p-3">{Number(item.qty)}</td>
@@ -494,6 +517,11 @@ export default function Page() {
                             {errorMessage ? (
                                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                                     {errorMessage}
+                                </div>
+                            ) : null}
+                            {loadingOptions ? (
+                                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                                    Memuat opsi barang dan gudang...
                                 </div>
                             ) : null}
 
@@ -638,3 +666,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

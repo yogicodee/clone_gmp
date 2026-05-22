@@ -140,7 +140,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id" as any)} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
                                     Nama Barang <ArrowUpDown size={14} />
@@ -151,9 +155,21 @@ export default function Page() {
                                     Gudang <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3 text-left">Qty</th>
-                            <th className="p-3 text-left">Satuan</th>
-                            <th className="p-3 text-left">Harga Beli</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("qty")} className="flex items-center gap-2">
+                                    Qty <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("satuan_terkecil")} className="flex items-center gap-2">
+                                    Satuan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("harga_beli")} className="flex items-center gap-2">
+                                    Harga Beli <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                         </tr>
                     </thead>
 
@@ -162,7 +178,7 @@ export default function Page() {
                             data.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3">{item.gudang?.nama_gudang ?? "-"}</td>
@@ -215,3 +231,5 @@ export default function Page() {
         </div>
     );
 }
+
+

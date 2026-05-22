@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\KeuanganAkuntansi\Pemasukan;
 
 use App\Http\Controllers\Controller;
 use App\Models\KeuanganAkuntansi\Pemasukan;
+use App\Support\CacheInvalidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -53,6 +54,7 @@ class PemasukanController extends Controller
     public function store(Request $request): JsonResponse
     {
         $record = Pemasukan::query()->create($this->validatePayload($request));
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data pemasukan berhasil ditambahkan.',
@@ -71,6 +73,7 @@ class PemasukanController extends Controller
     public function update(Request $request, Pemasukan $pemasukan): JsonResponse
     {
         $pemasukan->update($this->validatePayload($request));
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data pemasukan berhasil diperbarui.',
@@ -81,6 +84,7 @@ class PemasukanController extends Controller
     public function destroy(Pemasukan $pemasukan): JsonResponse
     {
         $pemasukan->delete();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data pemasukan berhasil dihapus.',

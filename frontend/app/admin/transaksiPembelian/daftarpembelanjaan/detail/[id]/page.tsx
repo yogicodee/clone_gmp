@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pencil } from "lucide-react";
+import { ArrowUpDown, Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 import api from "@/lib/api";
@@ -25,6 +25,7 @@ type WarehouseStockItem = {
     qty: number | string;
     satuan_terkecil: string;
 };
+type SortField = "id" | "nama_barang" | "qty" | "satuan" | "stok" | "kebutuhan" | "nama_supplier";
 
 function calculateKebutuhan(qty: number | string, stok: number | string) {
     return Math.max(Number(qty || 0) - Number(stok || 0), 0);
@@ -73,11 +74,14 @@ export default function Page() {
     const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [loadingSupplierOptions, setLoadingSupplierOptions] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
+    const [sortField, setSortField] = useState<SortField>("nama_barang");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [editTarget, setEditTarget] = useState<DaftarPembelanjaanItem | null>(null);
     const [form, setForm] = useState<EditForm>({ supplier_id: "" });
     const [currentPage, setCurrentPage] = useState(1);
@@ -88,7 +92,7 @@ export default function Page() {
             setLoading(true);
             setError("");
 
-            const [detailResponse, itemsResponse, supplierResponse, stokKeringResponse, stokBasahResponse] = await Promise.all([
+            const [detailResponse, itemsResponse, stokKeringResponse, stokBasahResponse] = await Promise.all([
                 api.get<ApiDetailResponse<DaftarPembelanjaan>>(
                     `/daftar-pembelanjaan/${daftarPembelanjaanId}`
                 ),
@@ -97,14 +101,13 @@ export default function Page() {
                     {
                         params: {
                             search: search || undefined,
+                            sort_field: sortField,
+                            sort_order: sortOrder,
                             page: currentPage,
                             per_page: perPage,
                         },
                     }
                 ),
-                api.get<ApiListResponse<SupplierOption>>("/supplier", {
-                    params: { per_page: 100 },
-                }),
                 api.get<ApiListResponse<WarehouseStockItem>>("/stok-kering", {
                     params: { per_page: 100 },
                 }),
@@ -117,7 +120,6 @@ export default function Page() {
             setDetail(detailData);
             setItems(itemsResponse.data.data ?? []);
             setMeta(itemsResponse.data.meta ?? initialMeta);
-            setSupplierOptions(supplierResponse.data.data ?? []);
 
             const stockMap: Record<string, number> = {};
             const warehouseStocks = [
@@ -136,7 +138,24 @@ export default function Page() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, daftarPembelanjaanId, perPage, search]);
+    }, [currentPage, daftarPembelanjaanId, perPage, search, sortField, sortOrder]);
+
+    const fetchSupplierOptions = useCallback(async () => {
+        if (loadingSupplierOptions) return;
+        if (supplierOptions.length > 0) return;
+
+        try {
+            setLoadingSupplierOptions(true);
+            const supplierResponse = await api.get<ApiListResponse<SupplierOption>>("/supplier", {
+                params: { per_page: 100 },
+            });
+            setSupplierOptions(supplierResponse.data.data ?? []);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setLoadingSupplierOptions(false);
+        }
+    }, [loadingSupplierOptions, supplierOptions.length]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -171,12 +190,22 @@ export default function Page() {
     );
 
     const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+
+        setSortField(field);
+        setSortOrder("asc");
+    };
 
     function openEditModal(item: DaftarPembelanjaanItem) {
         setEditTarget(item);
         setForm({
             supplier_id: item.supplier_id ?? "",
         });
+        void fetchSupplierOptions();
     }
 
     async function handleSubmit() {
@@ -259,13 +288,41 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
-                            <th className="p-3 text-left">Barang</th>
-                            <th className="p-3">Qty</th>
-                            <th className="p-3">Satuan</th>
-                            <th className="p-3">Stok</th>
-                            <th className="p-3">Kebutuhan</th>
-                            <th className="p-3 text-left">Supplier</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
+                                    Barang <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("qty")} className="flex items-center gap-2">
+                                    Qty <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("satuan")} className="flex items-center gap-2">
+                                    Satuan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("stok")} className="flex items-center gap-2">
+                                    Stok <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("kebutuhan")} className="flex items-center gap-2">
+                                    Kebutuhan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nama_supplier")} className="flex items-center gap-2">
+                                    Supplier <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">Aksi</th>
                         </tr>
                     </thead>
@@ -289,7 +346,7 @@ export default function Page() {
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3 text-center">{item.qty}</td>
@@ -352,6 +409,11 @@ export default function Page() {
                     >
                         <motion.div className="bg-white rounded-lg p-6 w-full max-w-lg space-y-4">
                             <h2 className="text-lg font-semibold">Pilih Supplier</h2>
+                            {loadingSupplierOptions ? (
+                                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                                    Memuat opsi supplier...
+                                </div>
+                            ) : null}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                 <div>

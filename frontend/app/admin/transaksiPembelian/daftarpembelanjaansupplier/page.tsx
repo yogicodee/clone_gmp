@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, Plus } from "lucide-react";
+import { ArrowUpDown, Eye, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import api from "@/lib/api";
@@ -37,6 +37,8 @@ export default function Page() {
     const [openForm, setOpenForm] = useState(false);
     const [tanggalPesan, setTanggalPesan] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
+    const [sortField, setSortField] = useState<"id" | "tanggal_pesan">("tanggal_pesan");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const perPage = 10;
 
     async function fetchData() {
@@ -49,8 +51,8 @@ export default function Page() {
                 {
                     params: {
                         tanggal_pesan: filterDate || undefined,
-                        sort_field: "tanggal_pesan",
-                        sort_order: "desc",
+                        sort_field: sortField,
+                        sort_order: sortOrder,
                         page: currentPage,
                         per_page: perPage,
                     },
@@ -68,11 +70,22 @@ export default function Page() {
 
     useEffect(() => {
         void fetchData();
-    }, [currentPage, filterDate]);
+    }, [currentPage, filterDate, sortField, sortOrder]);
 
     useEffect(() => {
         setCurrentPage(1);
     }, [filterDate]);
+
+    function handleSort(field: "id" | "tanggal_pesan") {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+
+        setSortField(field);
+        setSortOrder("asc");
+        setCurrentPage(1);
+    }
     const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
 
     async function handleCreate() {
@@ -127,9 +140,17 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
-                            <th className="p-3">Tgl Pesan</th>
-                            <th className="p-3">Aksi</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("tanggal_pesan")} className="flex w-full items-center justify-center gap-2">
+                                    Tgl Pesan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -152,9 +173,11 @@ export default function Page() {
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id"
+                                            ? item.id
+                                            : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
-                                    <td className="p-3">{item.tanggal_pesan}</td>
+                                    <td className="p-3 text-center">{item.tanggal_pesan}</td>
                                     <td className="p-3">
                                         <div className="flex justify-center">
                                             <button

@@ -257,7 +257,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white/80 shadow-xl">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
 
                             <th className="p-3">
                                 <button onClick={() => handleSort("sku")} className="flex items-center gap-2">
@@ -285,7 +289,9 @@ export default function Page() {
                         {data.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
+                                    {sortField === "id"
+                                        ? item.id
+                                        : ((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                 </td>
                                 <td className="p-3 font-semibold">{item.sku}</td>
                                 <td className="p-3">{item.nama}</td>

@@ -11,6 +11,7 @@ use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\InvoicePenjualan;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\TandaTerima;
+use App\Support\CacheInvalidation;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -163,6 +164,8 @@ class InvoicePenjualanController extends Controller
     {
         $payload = $this->validatePayload($request);
         $record = InvoicePenjualan::query()->create($payload);
+        CacheInvalidation::flushDashboardSummary();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Invoice penjualan berhasil ditambahkan.',
@@ -198,6 +201,8 @@ class InvoicePenjualanController extends Controller
     {
         $payload = $this->validatePayload($request, $invoicePenjualan);
         $invoicePenjualan->update($payload);
+        CacheInvalidation::flushDashboardSummary();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Invoice penjualan berhasil diperbarui.',
@@ -216,6 +221,8 @@ class InvoicePenjualanController extends Controller
     public function destroy(InvoicePenjualan $invoicePenjualan): JsonResponse
     {
         $invoicePenjualan->delete();
+        CacheInvalidation::flushDashboardSummary();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Invoice penjualan berhasil dihapus.',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\TransaksiPenjualan\Penjualan;
 use App\Http\Controllers\Controller;
 use App\Models\TransaksiPembelian\OrderPenawaran;
 use App\Models\TransaksiPenjualan\Penjualan;
+use App\Support\CacheInvalidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +83,7 @@ class PenjualanController extends Controller
                 ->map(fn (OrderPenawaran $order) => $this->syncFromOrderPenawaran($order))
                 ->all();
         });
+        CacheInvalidation::flushFinancialCaches();
 
         return response()->json([
             'message' => 'Data penjualan berhasil disinkronkan dari order penawaran.',
@@ -107,6 +109,7 @@ class PenjualanController extends Controller
     {
         $payload = $this->validatePayload($request, $penjualan);
         $penjualan->update($payload);
+        CacheInvalidation::flushFinancialCaches();
 
         return response()->json([
             'message' => 'Data penjualan berhasil diperbarui.',
@@ -117,6 +120,7 @@ class PenjualanController extends Controller
     public function destroy(Penjualan $penjualan): JsonResponse
     {
         $penjualan->delete();
+        CacheInvalidation::flushFinancialCaches();
 
         return response()->json([
             'message' => 'Data penjualan berhasil dihapus.',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\KeuanganAkuntansi\Pengeluaran;
 
 use App\Http\Controllers\Controller;
 use App\Models\KeuanganAkuntansi\Pengeluaran;
+use App\Support\CacheInvalidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -49,6 +50,8 @@ class PengeluaranController extends Controller
     public function store(Request $request): JsonResponse
     {
         $record = Pengeluaran::query()->create($this->validatePayload($request));
+        CacheInvalidation::flushDashboardSummary();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data pengeluaran berhasil ditambahkan.',
@@ -67,6 +70,8 @@ class PengeluaranController extends Controller
     public function update(Request $request, Pengeluaran $pengeluaran): JsonResponse
     {
         $pengeluaran->update($this->validatePayload($request));
+        CacheInvalidation::flushDashboardSummary();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data pengeluaran berhasil diperbarui.',
@@ -77,6 +82,8 @@ class PengeluaranController extends Controller
     public function destroy(Pengeluaran $pengeluaran): JsonResponse
     {
         $pengeluaran->delete();
+        CacheInvalidation::flushDashboardSummary();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data pengeluaran berhasil dihapus.',

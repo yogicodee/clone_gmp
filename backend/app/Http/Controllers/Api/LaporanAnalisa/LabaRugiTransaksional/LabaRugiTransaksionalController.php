@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Api\LaporanAnalisa\LabaRugiTransaksional;
 
 use App\Http\Controllers\Controller;
+use App\Support\CacheInvalidation;
 use App\Models\KeuanganAkuntansi\Pemasukan;
 use App\Models\KeuanganAkuntansi\Pengeluaran;
 use App\Models\MasterData\Sppg;
 use App\Models\TransaksiPenjualan\InvoicePenjualan;
 use App\Models\TransaksiPenjualan\TandaTerima;
+use App\Models\WarehouseSystem\WarehouseInbound;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class LabaRugiTransaksionalController extends Controller
 {
@@ -36,44 +39,65 @@ class LabaRugiTransaksionalController extends Controller
         }
 
         $sppgId = $validated['sppg_id'] ?? null;
+        $tanggalAwalString = $tanggalAwal->toDateString();
+        $tanggalAkhirString = $tanggalAkhir->toDateString();
+        $cacheKey = sprintf(
+            'laba_rugi_transaksional:%s:%s:%s',
+            $tanggalAwalString,
+            $tanggalAkhirString,
+            $sppgId ?? 'all'
+        );
 
-        $invoiceRows = $this->buildInvoiceRows($tanggalAwal, $tanggalAkhir, $sppgId);
-        $pemasukanRows = $this->buildPemasukanRows($tanggalAwal, $tanggalAkhir);
-        $pengeluaranRows = $this->buildPengeluaranRows($tanggalAwal, $tanggalAkhir);
+        $report = Cache::tags([CacheInvalidation::TAG_LABA_RUGI_TRANSAKSIONAL])->remember(
+            $cacheKey,
+            now()->addMinutes(5),
+            function () use ($tanggalAwal, $tanggalAkhir, $tanggalAwalString, $tanggalAkhirString, $sppgId): array {
+                $invoiceRows = $this->buildInvoiceRows($tanggalAwal, $tanggalAkhir, $sppgId);
+                $pemasukanRows = $this->buildPemasukanRows($tanggalAwal, $tanggalAkhir);
+                $pengeluaranPembelanjaanRows = $this->buildPengeluaranPembelanjaanRows($tanggalAwal, $tanggalAkhir);
+                $pengeluaranRows = $this->buildPengeluaranRows($tanggalAwal, $tanggalAkhir);
+                $totalPendapatanPenjualan = (float) $invoiceRows->sum('pendapatan');
+                $totalPemasukanLain = (float) $pemasukanRows->sum('jumlah');
+                $totalPengeluaranPembelanjaan = (float) $pengeluaranPembelanjaanRows->sum('total');
+                $totalPengeluaranOperasional = (float) $pengeluaranRows->sum('total');
+                $totalPengeluaran = $totalPengeluaranPembelanjaan + $totalPengeluaranOperasional;
+                $activeSppg = $sppgId ? Sppg::query()->find($sppgId) : null;
 
-        $totalPendapatanPenjualan = (float) $invoiceRows->sum('pendapatan');
-        $totalPemasukanLain = (float) $pemasukanRows->sum('jumlah');
-        $totalPengeluaran = (float) $pengeluaranRows->sum('total');
-
-        $activeSppg = $sppgId ? Sppg::query()->find($sppgId) : null;
+                return [
+                    'filters' => [
+                        'tanggal_awal' => $tanggalAwalString,
+                        'tanggal_akhir' => $tanggalAkhirString,
+                        'sppg_id' => $sppgId,
+                        'sppg' => $activeSppg?->nama_sppg,
+                    ],
+                    'summary' => [
+                        'total_pendapatan_penjualan' => $totalPendapatanPenjualan,
+                        'total_pemasukan_lain' => $totalPemasukanLain,
+                        'total_pengeluaran_pembelanjaan' => $totalPengeluaranPembelanjaan,
+                        'total_pengeluaran_operasional' => $totalPengeluaranOperasional,
+                        'total_pengeluaran' => $totalPengeluaran,
+                        'laba_bersih' => ($totalPendapatanPenjualan + $totalPemasukanLain) - ($totalPengeluaranPembelanjaan + $totalPengeluaranOperasional),
+                    ],
+                    'invoice_rows' => $invoiceRows->values()->all(),
+                    'pemasukan_rows' => $pemasukanRows->values()->all(),
+                    'pengeluaran_pembelanjaan_rows' => $pengeluaranPembelanjaanRows->values()->all(),
+                    'pengeluaran_rows' => $pengeluaranRows->values()->all(),
+                    'sppg_options' => Sppg::query()
+                        ->orderBy('nama_sppg')
+                        ->get(['id', 'nama_sppg'])
+                        ->map(fn (Sppg $sppg): array => [
+                            'id' => $sppg->id,
+                            'nama_sppg' => $sppg->nama_sppg,
+                        ])
+                        ->values()
+                        ->all(),
+                ];
+            }
+        );
 
         return response()->json([
             'message' => 'Laporan laba rugi transaksional berhasil diambil.',
-            'data' => [
-                'filters' => [
-                    'tanggal_awal' => $tanggalAwal->toDateString(),
-                    'tanggal_akhir' => $tanggalAkhir->toDateString(),
-                    'sppg_id' => $sppgId,
-                    'sppg' => $activeSppg?->nama_sppg,
-                ],
-                'summary' => [
-                    'total_pendapatan_penjualan' => $totalPendapatanPenjualan,
-                    'total_pemasukan_lain' => $totalPemasukanLain,
-                    'total_pengeluaran' => $totalPengeluaran,
-                    'laba_bersih' => $totalPendapatanPenjualan + $totalPemasukanLain - $totalPengeluaran,
-                ],
-                'invoice_rows' => $invoiceRows->values(),
-                'pemasukan_rows' => $pemasukanRows->values(),
-                'pengeluaran_rows' => $pengeluaranRows->values(),
-                'sppg_options' => Sppg::query()
-                    ->orderBy('nama_sppg')
-                    ->get(['id', 'nama_sppg'])
-                    ->map(fn (Sppg $sppg): array => [
-                        'id' => $sppg->id,
-                        'nama_sppg' => $sppg->nama_sppg,
-                    ])
-                    ->values(),
-            ],
+            'data' => $report,
         ]);
     }
 
@@ -143,6 +167,29 @@ class LabaRugiTransaksionalController extends Controller
                 'jenis' => $pemasukan->jenis,
                 'jumlah' => (float) $pemasukan->jumlah,
                 'keterangan' => $pemasukan->keterangan,
+            ]);
+    }
+
+    private function buildPengeluaranPembelanjaanRows(Carbon $tanggalAwal, Carbon $tanggalAkhir): Collection
+    {
+        return WarehouseInbound::query()
+            ->whereBetween('tanggal_masuk', [
+                $tanggalAwal->toDateString(),
+                $tanggalAkhir->toDateString(),
+            ])
+            ->orderByDesc('tanggal_masuk')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (WarehouseInbound $inbound): array => [
+                'id' => $inbound->id,
+                'tanggal' => $inbound->tanggal_masuk?->format('Y-m-d'),
+                'nama_barang' => $inbound->nama_barang,
+                'kategori' => $inbound->kategori,
+                'nama_supplier' => $inbound->nama_supplier,
+                'qty' => (float) $inbound->qty,
+                'satuan' => $inbound->satuan,
+                'harga_satuan' => (float) $inbound->harga_satuan,
+                'total' => (float) ($inbound->total_harga ?? ((float) $inbound->qty * (float) $inbound->harga_satuan)),
             ]);
     }
 

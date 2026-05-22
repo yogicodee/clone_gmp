@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api\WarehouseSystem\WarehouseStokBasah;
 
 use App\Http\Controllers\Controller;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
+use App\Support\CacheInvalidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class WarehouseStokBasahController extends Controller
@@ -15,7 +15,7 @@ class WarehouseStokBasahController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string'],
-            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'qty', 'satuan_terkecil', 'harga_beli'])],
+            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'gudang_id', 'qty', 'satuan_terkecil', 'harga_beli'])],
             'sort_order' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -33,7 +33,10 @@ class WarehouseStokBasahController extends Controller
                 warehouse_stok_basah.nama_barang,
                 SUM(warehouse_stok_basah.qty) as qty,
                 warehouse_stok_basah.satuan_terkecil,
-                warehouse_stok_basah.harga_beli,
+                COALESCE(
+                    SUM(warehouse_stok_basah.qty * warehouse_stok_basah.harga_beli) / NULLIF(SUM(warehouse_stok_basah.qty), 0),
+                    AVG(warehouse_stok_basah.harga_beli)
+                ) as harga_beli,
                 MAX(gudang.nama_gudang) as gudang_nama
             ')
             ->when($search, function ($query, string $keyword): void {
@@ -46,8 +49,7 @@ class WarehouseStokBasahController extends Controller
             ->groupBy(
                 'warehouse_stok_basah.gudang_id',
                 'warehouse_stok_basah.nama_barang',
-                'warehouse_stok_basah.satuan_terkecil',
-                'warehouse_stok_basah.harga_beli'
+                'warehouse_stok_basah.satuan_terkecil'
             )
             ->orderBy($this->resolveSortColumn($sortField), $sortOrder)
             ->paginate($perPage)
@@ -73,6 +75,7 @@ class WarehouseStokBasahController extends Controller
     public function store(Request $request): JsonResponse
     {
         $record = WarehouseStokBasah::query()->create($this->validatePayload($request));
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data stok basah berhasil ditambahkan.',
@@ -91,6 +94,7 @@ class WarehouseStokBasahController extends Controller
     public function update(Request $request, WarehouseStokBasah $stokBasah): JsonResponse
     {
         $stokBasah->update($this->validatePayload($request));
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data stok basah berhasil diperbarui.',
@@ -101,6 +105,7 @@ class WarehouseStokBasahController extends Controller
     public function destroy(WarehouseStokBasah $stokBasah): JsonResponse
     {
         $stokBasah->delete();
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data stok basah berhasil dihapus.',
@@ -127,7 +132,7 @@ class WarehouseStokBasahController extends Controller
             'gudang_id' => 'gudang_nama',
             'qty' => 'qty',
             'satuan_terkecil' => 'warehouse_stok_basah.satuan_terkecil',
-            'harga_beli' => 'warehouse_stok_basah.harga_beli',
+            'harga_beli' => 'harga_beli',
             default => 'warehouse_stok_basah.nama_barang',
         };
     }

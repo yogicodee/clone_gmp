@@ -189,6 +189,7 @@ export default function Page() {
   const [accountingOptions, setAccountingOptions] = useState<AccountingOption[]>([]);
   const [bankRekeningOptions, setBankRekeningOptions] = useState<BankRekeningOption[]>([]);
   const [perusahaanOptions, setPerusahaanOptions] = useState<PerusahaanOption[]>([]);
+  const [masterOptionsLoading, setMasterOptionsLoading] = useState(false);
   const [optionLoading, setOptionLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormType, string>>>({});
 
@@ -199,7 +200,7 @@ export default function Page() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState<"nomor_invoice" | "no_po" | "sppg" | "tanggal_kirim" | "tanggal_invoice" | "total_tagihan" | "status_pembayaran">("tanggal_invoice");
+  const [sortField, setSortField] = useState<"id" | "nomor_invoice" | "no_po" | "sppg" | "alamat" | "no_hp" | "tanggal_kirim" | "tanggal_invoice" | "total_tagihan" | "status_pembayaran">("tanggal_invoice");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const perPage = 10;
@@ -210,7 +211,7 @@ export default function Page() {
       const response = await api.get("/invoice-penjualan", {
         params: {
           search: search || undefined,
-          sort_field: sortField === "tanggal_kirim" || sortField === "no_po" || sortField === "sppg"
+          sort_field: sortField === "tanggal_kirim" || sortField === "no_po" || sortField === "sppg" || sortField === "alamat" || sortField === "no_hp"
             ? "tanggal_invoice"
             : sortField,
           sort_order: sortOrder,
@@ -256,48 +257,28 @@ export default function Page() {
     return undefined;
   }, [successMessage, errorMessage]);
 
-  const fetchAccountingOptions = useCallback(async () => {
+  const fetchMasterOptions = useCallback(async () => {
+    if (masterOptionsLoading) return;
+    if (accountingOptions.length > 0 && bankRekeningOptions.length > 0 && perusahaanOptions.length > 0) return;
+
     try {
-      const response = await api.get("/invoice-penjualan/opsi-accounting");
-      setAccountingOptions(response.data.data ?? []);
+      setMasterOptionsLoading(true);
+      const [accountingResponse, bankResponse, perusahaanResponse] = await Promise.all([
+        api.get("/invoice-penjualan/opsi-accounting"),
+        api.get("/invoice-penjualan/opsi-bank-rekening"),
+        api.get("/invoice-penjualan/opsi-perusahaan"),
+      ]);
+
+      setAccountingOptions(accountingResponse.data.data ?? []);
+      setBankRekeningOptions(bankResponse.data.data ?? []);
+      setPerusahaanOptions(perusahaanResponse.data.data ?? []);
     } catch (error) {
       logUnexpectedError(error);
-      setAccountingOptions([]);
-      setErrorMessage("Pilihan accounting gagal dimuat.");
+      setErrorMessage("Pilihan form invoice gagal dimuat.");
+    } finally {
+      setMasterOptionsLoading(false);
     }
-  }, []);
-
-  const fetchBankRekeningOptions = useCallback(async () => {
-    try {
-      const response = await api.get("/invoice-penjualan/opsi-bank-rekening");
-      setBankRekeningOptions(response.data.data ?? []);
-    } catch (error) {
-      logUnexpectedError(error);
-      setBankRekeningOptions([]);
-      setErrorMessage("Pilihan bank dan rekening gagal dimuat.");
-    }
-  }, []);
-
-  const fetchPerusahaanOptions = useCallback(async () => {
-    try {
-      const response = await api.get("/invoice-penjualan/opsi-perusahaan");
-      setPerusahaanOptions(response.data.data ?? []);
-    } catch (error) {
-      logUnexpectedError(error);
-      setPerusahaanOptions([]);
-      setErrorMessage("Pilihan perusahaan gagal dimuat.");
-    }
-  }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void fetchAccountingOptions();
-      void fetchBankRekeningOptions();
-      void fetchPerusahaanOptions();
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, [fetchAccountingOptions, fetchBankRekeningOptions, fetchPerusahaanOptions]);
+  }, [accountingOptions.length, bankRekeningOptions.length, masterOptionsLoading, perusahaanOptions.length]);
 
   const sortedData = useMemo(() => {
     const rows = [...data];
@@ -305,10 +286,16 @@ export default function Page() {
     rows.sort((a, b) => {
       const getValue = (item: InvoiceRecord) => {
         switch (sortField) {
+          case "id":
+            return item.id;
           case "no_po":
             return item.no_po ?? "";
           case "sppg":
             return item.sppg ?? "";
+          case "alamat":
+            return item.alamat ?? "";
+          case "no_hp":
+            return item.no_hp ?? "";
           case "tanggal_kirim":
             return item.tanggal_kirim ?? "";
           case "total_tagihan":
@@ -483,6 +470,7 @@ export default function Page() {
       status_pembayaran: item.status_pembayaran,
     });
 
+    await fetchMasterOptions();
     setEditId(item.id);
     setOpenForm(true);
     await fetchSppgOptions(item.tanggal_kirim ?? "", item.sppg_id ? String(item.sppg_id) : "");
@@ -683,8 +671,9 @@ export default function Page() {
         />
 
         <button
-          onClick={() => {
+          onClick={async () => {
             resetForm();
+            await fetchMasterOptions();
             setOpenForm(true);
           }}
           className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
@@ -698,7 +687,11 @@ export default function Page() {
         <table className="w-full text-sm">
           <thead className="bg-white shadow-lg">
             <tr>
-              <th className="p-3">No</th>
+              <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
               <th className="p-3">
                 <button onClick={() => handleSort("nomor_invoice")} className="flex items-center gap-2">
                   Nomor Invoice <ArrowUpDown size={14} />
@@ -714,8 +707,16 @@ export default function Page() {
                   SPPG <ArrowUpDown size={14} />
                 </button>
               </th>
-              <th className="p-3 text-left">Alamat</th>
-              <th className="p-3">No HP</th>
+              <th className="p-3">
+                <button onClick={() => handleSort("alamat")} className="flex items-center gap-2">
+                  Alamat <ArrowUpDown size={14} />
+                </button>
+              </th>
+              <th className="p-3">
+                <button onClick={() => handleSort("no_hp")} className="flex items-center gap-2">
+                  No HP <ArrowUpDown size={14} />
+                </button>
+              </th>
               <th className="p-3">
                 <button onClick={() => handleSort("tanggal_kirim")} className="flex items-center gap-2">
                   Tanggal Kirim <ArrowUpDown size={14} />
@@ -750,9 +751,7 @@ export default function Page() {
             ) : sortedData.length > 0 ? (
               sortedData.map((item, index) => (
                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
-                  <td className="p-3 text-center">
-                    {(meta.current_page - 1) * perPage + index + 1}
-                  </td>
+                  <td className="p-3 text-center">{item.id}</td>
                   <td className="p-3">{item.nomor_invoice}</td>
                   <td className="p-3">{item.no_po ?? "-"}</td>
                   <td className="p-3">{item.sppg ?? "-"}</td>
@@ -830,6 +829,11 @@ export default function Page() {
           <Modal onClose={resetForm}>
             <motion.div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
               <h2 className="text-lg font-semibold">{editId ? "Edit Data" : "Tambah Data"}</h2>
+              {masterOptionsLoading ? (
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                  Memuat pilihan accounting, bank, dan perusahaan...
+                </div>
+              ) : null}
 
               <div className="space-y-1">
                 <input
@@ -1170,3 +1174,5 @@ function Modal({
     </motion.div>
   );
 }
+
+

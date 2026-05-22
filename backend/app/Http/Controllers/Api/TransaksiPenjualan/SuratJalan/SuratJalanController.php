@@ -7,6 +7,7 @@ use App\Models\MasterData\Karyawan;
 use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\SuratJalan;
+use App\Support\CacheInvalidation;
 use Illuminate\Support\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,6 +69,7 @@ class SuratJalanController extends Controller
 
             return $record;
         });
+        CacheInvalidation::flushDashboardSalesBySppg();
 
         return response()->json([
             'message' => 'Data surat jalan berhasil ditambahkan.',
@@ -98,6 +100,7 @@ class SuratJalanController extends Controller
             $suratJalan->update($this->validatePayload($request, $suratJalan));
             $this->syncItemsFromPenjualan($suratJalan);
         });
+        CacheInvalidation::flushDashboardSalesBySppg();
 
         return response()->json([
             'message' => 'Data surat jalan berhasil diperbarui.',
@@ -108,6 +111,7 @@ class SuratJalanController extends Controller
     public function destroy(SuratJalan $suratJalan): JsonResponse
     {
         $suratJalan->delete();
+        CacheInvalidation::flushDashboardSalesBySppg();
 
         return response()->json([
             'message' => 'Data surat jalan berhasil dihapus.',

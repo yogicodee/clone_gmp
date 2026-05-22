@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, Plus, Trash2 } from "lucide-react";
+import { ArrowUpDown, Eye, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { extractErrorMessage, type ApiListResponse, type Meta } from "@/lib/transaksiPembelian";
@@ -40,6 +40,7 @@ type TandaTerimaRecord = {
     akuntan?: KaryawanOption | null;
     driver?: KaryawanOption | null;
 };
+type SortField = "id" | "nomor_surat_jalan" | "no_po" | "tanggal" | "status" | "sppg" | "driver";
 
 type FormType = {
     tanggal: string;
@@ -88,6 +89,8 @@ export default function Page() {
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
+    const [sortField, setSortField] = useState<SortField>("tanggal");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
 
@@ -102,6 +105,8 @@ export default function Page() {
                 api.get<ApiListResponse<TandaTerimaRecord>>("/tanda-terima", {
                     params: {
                         search: search || undefined,
+                        sort_field: sortField === "sppg" || sortField === "driver" ? "tanggal" : sortField,
+                        sort_order: sortOrder,
                         page: currentPage,
                         per_page: perPage,
                     },
@@ -115,7 +120,7 @@ export default function Page() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, perPage, search]);
+  }, [currentPage, perPage, search, sortField, sortOrder]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -222,7 +227,25 @@ export default function Page() {
             setSubmitting(false);
         }
     };
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+        setSortField(field);
+        setSortOrder("asc");
+    };
     const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
+    const sortedRecords = useMemo(() => {
+        if (sortField !== "sppg" && sortField !== "driver") return records;
+        const rows = [...records];
+        rows.sort((a, b) => {
+            const aText = (sortField === "sppg" ? a.sppg?.nama_sppg : a.driver?.nama || "").toLowerCase();
+            const bText = (sortField === "sppg" ? b.sppg?.nama_sppg : b.driver?.nama || "").toLowerCase();
+            return sortOrder === "asc" ? aText.localeCompare(bText) : bText.localeCompare(aText);
+        });
+        return rows;
+    }, [records, sortField, sortOrder]);
 
     return (
         <div className="p-6 space-y-6">
@@ -263,13 +286,41 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
-                            <th className="p-3 text-left">No. Surat Jalan</th>
-                            <th className="p-3 text-left">No. PO</th>
-                            <th className="p-3 text-left">Tanggal</th>
-                            <th className="p-3 text-left">SPPG</th>
-                            <th className="p-3 text-left">Driver</th>
-                            <th className="p-3 text-left">Status</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("nomor_surat_jalan")} className="flex items-center gap-2">
+                                    No. Surat Jalan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("no_po")} className="flex items-center gap-2">
+                                    No. PO <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("tanggal")} className="flex items-center gap-2">
+                                    Tanggal <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("sppg")} className="flex items-center gap-2">
+                                    SPPG <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("driver")} className="flex items-center gap-2">
+                                    Driver <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("status")} className="flex items-center gap-2">
+                                    Status <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -287,10 +338,10 @@ export default function Page() {
                                 </td>
                             </tr>
                         ) : (
-                            records.map((item, index) => (
+                            sortedRecords.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nomor_surat_jalan}</td>
                                     <td className="p-3">{item.no_po || "-"}</td>

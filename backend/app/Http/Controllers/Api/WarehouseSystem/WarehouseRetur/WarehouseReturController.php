@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\WarehouseSystem\WarehouseRetur;
 
 use App\Http\Controllers\Controller;
+use App\Support\CacheInvalidation;
 use App\Models\WarehouseSystem\WarehouseRetur;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
 use App\Models\WarehouseSystem\WarehouseStokKering;
@@ -65,6 +66,7 @@ class WarehouseReturController extends Controller
 
             return WarehouseRetur::query()->create($payload);
         });
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data retur/rusak berhasil ditambahkan.',
@@ -89,6 +91,7 @@ class WarehouseReturController extends Controller
             $this->deductStock($payload);
             $returRusak->update($payload);
         });
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data retur/rusak berhasil diperbarui.',
@@ -102,6 +105,7 @@ class WarehouseReturController extends Controller
             $this->restoreStock($returRusak);
             $returRusak->delete();
         });
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data retur/rusak berhasil dihapus.',

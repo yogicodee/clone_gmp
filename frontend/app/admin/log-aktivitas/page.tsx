@@ -56,7 +56,6 @@ export default function Page() {
     const [data, setData] = useState<ActivityLog[]>([]);
     const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
-    const [mounted, setMounted] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
@@ -88,10 +87,6 @@ export default function Page() {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -208,7 +203,7 @@ export default function Page() {
 
             <div className="flex justify-end gap-2">
                 <button
-                    disabled={(meta.current_page || 1) === 1 || (mounted ? loading : false)}
+                    disabled={Boolean((meta.current_page || 1) === 1 || loading)}
                     onClick={() => setCurrentPage((prev) => prev - 1)}
                     className="rounded-md border px-3 py-1"
                 >
@@ -219,7 +214,7 @@ export default function Page() {
                     <button
                         key={index}
                         onClick={() => setCurrentPage(index + 1)}
-                        disabled={mounted ? loading : false}
+                        disabled={Boolean(loading)}
                         className={`rounded-md border px-3 py-1 ${meta.current_page === index + 1 ? "bg-primary text-white" : ""}`}
                     >
                         {index + 1}
@@ -227,7 +222,7 @@ export default function Page() {
                 ))}
 
                 <button
-                    disabled={(meta.current_page || 1) === totalPages || totalPages === 0 || (mounted ? loading : false)}
+                    disabled={Boolean((meta.current_page || 1) === totalPages || totalPages === 0 || loading)}
                     onClick={() => setCurrentPage((prev) => prev + 1)}
                     className="rounded-md border px-3 py-1"
                 >

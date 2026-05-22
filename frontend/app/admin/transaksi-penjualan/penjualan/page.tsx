@@ -24,6 +24,7 @@ type Penjualan = {
     status: "draft" | "selesai" | "batal";
     order_penawaran?: OrderPenawaranSource | null;
 };
+type SortField = keyof Penjualan | "pembeli";
 
 type FormType = {
     tanggal: string;
@@ -80,7 +81,7 @@ export default function Page() {
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
-    const [sortField, setSortField] = useState<keyof Penjualan>("tanggal");
+    const [sortField, setSortField] = useState<SortField>("tanggal");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
@@ -92,7 +93,7 @@ export default function Page() {
             const response = await api.get<ApiListResponse<Penjualan>>("/penjualan", {
                 params: {
                     search: search || undefined,
-                    sort_field: sortField,
+                    sort_field: sortField === "pembeli" ? "tanggal" : sortField,
                     sort_order: sortOrder,
                     page: currentPage,
                     per_page: perPage,
@@ -240,7 +241,7 @@ export default function Page() {
         }
     };
 
-    const handleSort = (field: keyof Penjualan) => {
+    const handleSort = (field: SortField) => {
         if (sortField === field) {
             setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
             return;
@@ -251,6 +252,16 @@ export default function Page() {
     };
 
     const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
+    const sortedData = useMemo(() => {
+        if (sortField !== "pembeli") return data;
+        const rows = [...data];
+        rows.sort((a, b) => {
+            const aText = (a.order_penawaran?.nama_pembeli ?? "").toLowerCase();
+            const bText = (b.order_penawaran?.nama_pembeli ?? "").toLowerCase();
+            return sortOrder === "asc" ? aText.localeCompare(bText) : bText.localeCompare(aText);
+        });
+        return rows;
+    }, [data, sortField, sortOrder]);
 
     return (
         <div className="p-6 space-y-6">
@@ -291,7 +302,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("kode_penjualan")} className="flex gap-2">
                                     Kode Penjualan <ArrowUpDown size={14} />
@@ -302,7 +317,11 @@ export default function Page() {
                                     Tanggal <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3 text-left">Pembeli</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("pembeli")} className="flex items-center gap-2">
+                                    Pembeli <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("total_harga")} className="flex gap-2">
                                     Total Harga <ArrowUpDown size={14} />
@@ -319,10 +338,10 @@ export default function Page() {
 
                     <tbody>
                         {data.length > 0 ? (
-                            data.map((item, index) => (
+                            sortedData.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.kode_penjualan}</td>
                                     <td className="p-3">{formatTanggal(item.tanggal)}</td>
@@ -511,3 +530,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, HandCoins, ReceiptText, Wallet } from "lucide-react";
+import { ArrowUpDown, CalendarRange, HandCoins, ReceiptText, ShoppingCart, Wallet } from "lucide-react";
 import api from "@/lib/api";
 import { extractErrorMessage, formatCurrency } from "@/lib/transaksiPembelian";
 
@@ -29,6 +29,18 @@ type PemasukanRow = {
     keterangan: string;
 };
 
+type PengeluaranPembelanjaanRow = {
+    id: number;
+    tanggal: string | null;
+    nama_barang: string;
+    kategori: string;
+    nama_supplier: string;
+    qty: number;
+    satuan: string;
+    harga_satuan: number;
+    total: number;
+};
+
 type PengeluaranRow = {
     id: number;
     tanggal: string | null;
@@ -49,11 +61,14 @@ type ReportData = {
     summary: {
         total_pendapatan_penjualan: number;
         total_pemasukan_lain: number;
+        total_pengeluaran_pembelanjaan: number;
+        total_pengeluaran_operasional: number;
         total_pengeluaran: number;
         laba_bersih: number;
     };
     invoice_rows: InvoiceRow[];
     pemasukan_rows: PemasukanRow[];
+    pengeluaran_pembelanjaan_rows: PengeluaranPembelanjaanRow[];
     pengeluaran_rows: PengeluaranRow[];
     sppg_options: SppgOption[];
 };
@@ -102,6 +117,14 @@ export default function Page() {
     const [reportData, setReportData] = useState<ReportData | null>(null);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState("");
+    const [invoiceSortField, setInvoiceSortField] = useState<"id" | "tanggal_kirim" | "tanggal_invoice" | "sppg" | "nomor_invoice" | "pendapatan" | "status_pembayaran">("tanggal_invoice");
+    const [invoiceSortOrder, setInvoiceSortOrder] = useState<"asc" | "desc">("desc");
+    const [pemasukanSortField, setPemasukanSortField] = useState<"tanggal" | "jenis" | "jumlah" | "keterangan">("tanggal");
+    const [pemasukanSortOrder, setPemasukanSortOrder] = useState<"asc" | "desc">("desc");
+    const [pengeluaranPembelanjaanSortField, setPengeluaranPembelanjaanSortField] = useState<"tanggal" | "nama_barang" | "kategori" | "nama_supplier" | "qty" | "satuan" | "harga_satuan" | "total">("tanggal");
+    const [pengeluaranPembelanjaanSortOrder, setPengeluaranPembelanjaanSortOrder] = useState<"asc" | "desc">("desc");
+    const [pengeluaranSortField, setPengeluaranSortField] = useState<"tanggal" | "nama_operasional" | "qty" | "satuan" | "total">("tanggal");
+    const [pengeluaranSortOrder, setPengeluaranSortOrder] = useState<"asc" | "desc">("desc");
 
     const fetchReport = async () => {
         try {
@@ -125,7 +148,6 @@ export default function Page() {
     };
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         void fetchReport();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appliedFilters]);
@@ -147,8 +169,14 @@ export default function Page() {
                 tone: "text-emerald-700 bg-emerald-50 border-emerald-200",
             },
             {
+                label: "Pengeluaran Pembelanjaan",
+                value: formatCurrency(reportData.summary.total_pengeluaran_pembelanjaan),
+                icon: ShoppingCart,
+                tone: "text-orange-700 bg-orange-50 border-orange-200",
+            },
+            {
                 label: "Pengeluaran Operasional",
-                value: formatCurrency(reportData.summary.total_pengeluaran),
+                value: formatCurrency(reportData.summary.total_pengeluaran_operasional),
                 icon: Wallet,
                 tone: "text-amber-700 bg-amber-50 border-amber-200",
             },
@@ -164,13 +192,110 @@ export default function Page() {
         ];
     }, [reportData]);
 
+    const sortedInvoiceRows = useMemo(() => {
+        const rows = [...(reportData?.invoice_rows ?? [])];
+        rows.sort((a, b) => {
+            const av = a[invoiceSortField] ?? "";
+            const bv = b[invoiceSortField] ?? "";
+            if (typeof av === "number" && typeof bv === "number") {
+                return invoiceSortOrder === "asc" ? av - bv : bv - av;
+            }
+            return invoiceSortOrder === "asc"
+                ? String(av).localeCompare(String(bv))
+                : String(bv).localeCompare(String(av));
+        });
+        return rows;
+    }, [reportData?.invoice_rows, invoiceSortField, invoiceSortOrder]);
+
+    const sortedPemasukanRows = useMemo(() => {
+        const rows = [...(reportData?.pemasukan_rows ?? [])];
+        rows.sort((a, b) => {
+            const av = a[pemasukanSortField] ?? "";
+            const bv = b[pemasukanSortField] ?? "";
+            if (typeof av === "number" && typeof bv === "number") {
+                return pemasukanSortOrder === "asc" ? av - bv : bv - av;
+            }
+            return pemasukanSortOrder === "asc"
+                ? String(av).localeCompare(String(bv))
+                : String(bv).localeCompare(String(av));
+        });
+        return rows;
+    }, [reportData?.pemasukan_rows, pemasukanSortField, pemasukanSortOrder]);
+
+    const sortedPengeluaranPembelanjaanRows = useMemo(() => {
+        const rows = [...(reportData?.pengeluaran_pembelanjaan_rows ?? [])];
+        rows.sort((a, b) => {
+            const av = a[pengeluaranPembelanjaanSortField] ?? "";
+            const bv = b[pengeluaranPembelanjaanSortField] ?? "";
+            if (typeof av === "number" && typeof bv === "number") {
+                return pengeluaranPembelanjaanSortOrder === "asc" ? av - bv : bv - av;
+            }
+            return pengeluaranPembelanjaanSortOrder === "asc"
+                ? String(av).localeCompare(String(bv))
+                : String(bv).localeCompare(String(av));
+        });
+        return rows;
+    }, [
+        reportData?.pengeluaran_pembelanjaan_rows,
+        pengeluaranPembelanjaanSortField,
+        pengeluaranPembelanjaanSortOrder,
+    ]);
+
+    const sortedPengeluaranRows = useMemo(() => {
+        const rows = [...(reportData?.pengeluaran_rows ?? [])];
+        rows.sort((a, b) => {
+            const av = a[pengeluaranSortField] ?? "";
+            const bv = b[pengeluaranSortField] ?? "";
+            if (typeof av === "number" && typeof bv === "number") {
+                return pengeluaranSortOrder === "asc" ? av - bv : bv - av;
+            }
+            return pengeluaranSortOrder === "asc"
+                ? String(av).localeCompare(String(bv))
+                : String(bv).localeCompare(String(av));
+        });
+        return rows;
+    }, [reportData?.pengeluaran_rows, pengeluaranSortField, pengeluaranSortOrder]);
+
+    const toggleInvoiceSort = (field: typeof invoiceSortField) => {
+        if (invoiceSortField === field) {
+            setInvoiceSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+        setInvoiceSortField(field);
+        setInvoiceSortOrder(field === "tanggal_invoice" || field === "tanggal_kirim" ? "desc" : "asc");
+    };
+    const togglePemasukanSort = (field: typeof pemasukanSortField) => {
+        if (pemasukanSortField === field) {
+            setPemasukanSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+        setPemasukanSortField(field);
+        setPemasukanSortOrder(field === "tanggal" ? "desc" : "asc");
+    };
+    const togglePengeluaranPembelanjaanSort = (field: typeof pengeluaranPembelanjaanSortField) => {
+        if (pengeluaranPembelanjaanSortField === field) {
+            setPengeluaranPembelanjaanSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+        setPengeluaranPembelanjaanSortField(field);
+        setPengeluaranPembelanjaanSortOrder(field === "tanggal" ? "desc" : "asc");
+    };
+    const togglePengeluaranSort = (field: typeof pengeluaranSortField) => {
+        if (pengeluaranSortField === field) {
+            setPengeluaranSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            return;
+        }
+        setPengeluaranSortField(field);
+        setPengeluaranSortOrder(field === "tanggal" ? "desc" : "asc");
+    };
+
     return (
         <main className="space-y-6 rounded-3xl border border-white bg-white/30 p-6 backdrop-blur-2xl">
             <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold">Laporan Laba Rugi Transaksional</h1>
                     <p className="text-sm text-muted-foreground">
-                        Ringkasan pendapatan, pemasukan lain, dan pengeluaran operasional per periode dengan opsi filter SPPG.
+                        Ringkasan pendapatan dan pengeluaran per periode dengan opsi filter SPPG.
                     </p>
                 </div>
             </div>
@@ -245,7 +370,7 @@ export default function Page() {
                 ) : null}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 {summaryCards.map((card) => {
                     const Icon = card.icon;
 
@@ -275,13 +400,13 @@ export default function Page() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-100">
                             <tr>
-                                <th className="p-3 text-left">No</th>
-                                <th className="p-3 text-left">Tanggal Kirim</th>
-                                <th className="p-3 text-left">Tanggal Invoice</th>
-                                <th className="p-3 text-left">SPPG</th>
-                                <th className="p-3 text-left">Nomor Invoice</th>
-                                <th className="p-3 text-left">Pendapatan</th>
-                                <th className="p-3 text-left">Status</th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("id")} className="flex items-center gap-2">No <ArrowUpDown size={14} /></button></th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("tanggal_kirim")} className="flex items-center gap-2">Tanggal Kirim <ArrowUpDown size={14} /></button></th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("tanggal_invoice")} className="flex items-center gap-2">Tanggal Invoice <ArrowUpDown size={14} /></button></th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("sppg")} className="flex items-center gap-2">SPPG <ArrowUpDown size={14} /></button></th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("nomor_invoice")} className="flex items-center gap-2">Nomor Invoice <ArrowUpDown size={14} /></button></th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("pendapatan")} className="flex items-center gap-2">Pendapatan <ArrowUpDown size={14} /></button></th>
+                                <th className="p-3 text-left"><button onClick={() => toggleInvoiceSort("status_pembayaran")} className="flex items-center gap-2">Status <ArrowUpDown size={14} /></button></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -298,7 +423,7 @@ export default function Page() {
                                     </td>
                                 </tr>
                             ) : (
-                                reportData?.invoice_rows.map((row, index) => (
+                                sortedInvoiceRows.map((row, index) => (
                                     <tr key={row.id} className="border-t">
                                         <td className="p-3">{index + 1}</td>
                                         <td className="p-3">{formatDate(row.tanggal_kirim)}</td>
@@ -315,7 +440,7 @@ export default function Page() {
                 </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-2">
+            <div className="grid gap-6 xl:grid-cols-3">
                 <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
                     <div className="border-b px-4 py-3">
                         <h2 className="text-lg font-semibold">Pemasukan Lain</h2>
@@ -325,10 +450,10 @@ export default function Page() {
                         <table className="w-full text-sm">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-3 text-left">Tanggal</th>
-                                    <th className="p-3 text-left">Jenis</th>
-                                    <th className="p-3 text-left">Jumlah</th>
-                                    <th className="p-3 text-left">Keterangan</th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePemasukanSort("tanggal")} className="flex items-center gap-2">Tanggal <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePemasukanSort("jenis")} className="flex items-center gap-2">Jenis <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePemasukanSort("jumlah")} className="flex items-center gap-2">Jumlah <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePemasukanSort("keterangan")} className="flex items-center gap-2">Keterangan <ArrowUpDown size={14} /></button></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -345,12 +470,57 @@ export default function Page() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    reportData?.pemasukan_rows.map((row) => (
+                                    sortedPemasukanRows.map((row) => (
                                         <tr key={row.id} className="border-t">
                                             <td className="p-3">{formatDate(row.tanggal)}</td>
                                             <td className="p-3 capitalize">{row.jenis}</td>
                                             <td className="p-3">{formatCurrency(row.jumlah)}</td>
                                             <td className="p-3">{row.keterangan}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+                    <div className="border-b px-4 py-3">
+                        <h2 className="text-lg font-semibold">Pengeluaran Pembelanjaan</h2>
+                    </div>
+
+                    <div className="overflow-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-100">
+                                <tr>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranPembelanjaanSort("tanggal")} className="flex items-center gap-2">Tanggal <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranPembelanjaanSort("nama_barang")} className="flex items-center gap-2">Barang <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranPembelanjaanSort("nama_supplier")} className="flex items-center gap-2">Supplier <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranPembelanjaanSort("qty")} className="flex items-center gap-2">Qty <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranPembelanjaanSort("total")} className="flex items-center gap-2">Total <ArrowUpDown size={14} /></button></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-6 text-center text-gray-500">
+                                            Memuat data...
+                                        </td>
+                                    </tr>
+                                ) : (reportData?.pengeluaran_pembelanjaan_rows.length ?? 0) === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-6 text-center text-gray-500">
+                                            Belum ada pengeluaran pembelanjaan pada periode ini.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    sortedPengeluaranPembelanjaanRows.map((row) => (
+                                        <tr key={row.id} className="border-t">
+                                            <td className="p-3">{formatDate(row.tanggal)}</td>
+                                            <td className="p-3">{row.nama_barang}</td>
+                                            <td className="p-3">{row.nama_supplier}</td>
+                                            <td className="p-3">{row.qty} {row.satuan}</td>
+                                            <td className="p-3">{formatCurrency(row.total)}</td>
                                         </tr>
                                     ))
                                 )}
@@ -368,11 +538,11 @@ export default function Page() {
                         <table className="w-full text-sm">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-3 text-left">Tanggal</th>
-                                    <th className="p-3 text-left">Operasional</th>
-                                    <th className="p-3 text-left">Qty</th>
-                                    <th className="p-3 text-left">Satuan</th>
-                                    <th className="p-3 text-left">Total</th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranSort("tanggal")} className="flex items-center gap-2">Tanggal <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranSort("nama_operasional")} className="flex items-center gap-2">Operasional <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranSort("qty")} className="flex items-center gap-2">Qty <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranSort("satuan")} className="flex items-center gap-2">Satuan <ArrowUpDown size={14} /></button></th>
+                                    <th className="p-3 text-left"><button onClick={() => togglePengeluaranSort("total")} className="flex items-center gap-2">Total <ArrowUpDown size={14} /></button></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -389,7 +559,7 @@ export default function Page() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    reportData?.pengeluaran_rows.map((row) => (
+                                    sortedPengeluaranRows.map((row) => (
                                         <tr key={row.id} className="border-t">
                                             <td className="p-3">{formatDate(row.tanggal)}</td>
                                             <td className="p-3">{row.nama_operasional}</td>

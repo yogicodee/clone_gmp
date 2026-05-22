@@ -5,7 +5,6 @@ import { Pencil, Trash2, Plus, ArrowUpDown, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { useFetch } from "@/hooks/useFetch";
 import { extractErrorMessage, type ApiListResponse, type Meta } from "@/lib/transaksiPembelian";
 import axios from "axios";
 
@@ -40,6 +39,7 @@ type SuratJalan = {
     armada_ref?: ArmadaOption | null;
     driver?: DriverOption | null;
 };
+type SortField = keyof SuratJalan | "sppg" | "armada" | "no_pol" | "driver";
 
 type FormType = {
     nomor_surat_jalan: string;
@@ -88,9 +88,10 @@ export default function Page() {
     const router = useRouter();
     const [data, setData] = useState<SuratJalan[]>([]);
     const [meta, setMeta] = useState<Meta>(initialMeta);
-    const { data: sppgData } = useFetch<SppgOption>("/sppg");
-    const { data: armadaData } = useFetch<ArmadaOption>("/armada");
-    const { data: driverData } = useFetch<DriverOption>("/karyawan?search=driver&per_page=100");
+    const [sppgData, setSppgData] = useState<SppgOption[]>([]);
+    const [armadaData, setArmadaData] = useState<ArmadaOption[]>([]);
+    const [driverData, setDriverData] = useState<DriverOption[]>([]);
+    const [loadingOptions, setLoadingOptions] = useState(false);
 
     const [form, setForm] = useState<FormType>(initialForm);
     const [editTarget, setEditTarget] = useState<SuratJalan | null>(null);
@@ -103,7 +104,7 @@ export default function Page() {
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
-    const [sortField, setSortField] = useState<keyof SuratJalan>("tanggal");
+    const [sortField, setSortField] = useState<SortField>("tanggal");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
@@ -115,7 +116,9 @@ export default function Page() {
             const response = await api.get<ApiListResponse<SuratJalan>>("/surat-jalan", {
                 params: {
                     search: search || undefined,
-                    sort_field: sortField,
+                    sort_field: sortField === "sppg" || sortField === "armada" || sortField === "no_pol" || sortField === "driver"
+                        ? "tanggal"
+                        : sortField,
                     sort_order: sortOrder,
                     page: currentPage,
                     per_page: perPage,
@@ -126,6 +129,28 @@ export default function Page() {
             setMeta(response.data.meta ?? initialMeta);
         } catch (error) {
             setErrorMessage(extractErrorMessage(error));
+        }
+    };
+
+    const fetchFormOptions = async () => {
+        if (loadingOptions) return;
+        if (sppgData.length > 0 && armadaData.length > 0 && driverData.length > 0) return;
+
+        try {
+            setLoadingOptions(true);
+            const [sppgRes, armadaRes, driverRes] = await Promise.all([
+                api.get<ApiListResponse<SppgOption>>("/sppg", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<ArmadaOption>>("/armada", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<DriverOption>>("/karyawan", { params: { search: "driver", per_page: 100 } }),
+            ]);
+
+            setSppgData(sppgRes.data.data ?? []);
+            setArmadaData(armadaRes.data.data ?? []);
+            setDriverData(driverRes.data.data ?? []);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoadingOptions(false);
         }
     };
 
@@ -163,6 +188,7 @@ export default function Page() {
         setErrorMessage("");
         setSuccessMessage("");
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleEdit = (item: SuratJalan) => {
@@ -179,6 +205,7 @@ export default function Page() {
         setFieldErrors({});
         setErrorMessage("");
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleSubmit = async () => {
@@ -269,7 +296,7 @@ export default function Page() {
         }
     };
 
-    const handleSort = (field: keyof SuratJalan) => {
+    const handleSort = (field: SortField) => {
         if (sortField === field) {
             setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
             return;
@@ -279,6 +306,22 @@ export default function Page() {
     };
 
     const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
+    const sortedData = useMemo(() => {
+        if (!["sppg", "armada", "no_pol", "driver"].includes(sortField)) return data;
+        const rows = [...data];
+        rows.sort((a, b) => {
+            const getValue = (item: SuratJalan) => {
+                if (sortField === "sppg") return item.sppg?.nama_sppg ?? "";
+                if (sortField === "armada") return item.armada_ref?.nama_unit ?? "";
+                if (sortField === "no_pol") return item.armada_ref?.no_pol ?? "";
+                return item.driver?.nama ?? "";
+            };
+            const aText = getValue(a).toLowerCase();
+            const bText = getValue(b).toLowerCase();
+            return sortOrder === "asc" ? aText.localeCompare(bText) : bText.localeCompare(aText);
+        });
+        return rows;
+    }, [data, sortField, sortOrder]);
 
     const selectedArmada = armadaData.find((item) => item.id === form.armada_id) ?? null;
     const filteredDriverData = useMemo(
@@ -329,30 +372,62 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("nomor_surat_jalan")} className="flex items-center gap-2">
                                     No Surat Jalan
                                     <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3 text-left">SPPG</th>
-                            <th className="p-3 text-left">Tanggal</th>
-                            <th className="p-3 text-left">No PO</th>
-                            <th className="p-3 text-left">Armada</th>
-                            <th className="p-3 text-left">No Pol</th>
-                            <th className="p-3 text-left">Driver</th>
-                            <th className="p-3 text-left">Status</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("sppg")} className="flex items-center gap-2">
+                                    SPPG <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("tanggal")} className="flex items-center gap-2">
+                                    Tanggal <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("no_po")} className="flex items-center gap-2">
+                                    No PO <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("armada")} className="flex items-center gap-2">
+                                    Armada <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("no_pol")} className="flex items-center gap-2">
+                                    No Pol <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("driver")} className="flex items-center gap-2">
+                                    Driver <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("status")} className="flex items-center gap-2">
+                                    Status <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
 
                     <tbody>
                         {data.length > 0 ? (
-                            data.map((item, index) => (
+                            sortedData.map((item, index) => (
                                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nomor_surat_jalan}</td>
                                     <td className="p-3">{item.sppg?.nama_sppg ?? "-"}</td>
@@ -434,6 +509,11 @@ export default function Page() {
                             {errorMessage ? (
                                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                                     {errorMessage}
+                                </div>
+                            ) : null}
+                            {loadingOptions ? (
+                                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                                    Memuat opsi SPPG, armada, dan driver...
                                 </div>
                             ) : null}
 
@@ -604,3 +684,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

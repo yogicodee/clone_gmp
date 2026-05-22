@@ -15,6 +15,7 @@ type Pengeluaran = {
     satuan: string;
     harga_satuan: number | string;
 };
+type SortField = keyof Pengeluaran | "total";
 
 type FormType = {
     nama_operasional: string;
@@ -72,7 +73,7 @@ export default function Page() {
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
-    const [sortField, setSortField] = useState<keyof Pengeluaran>("tanggal_keluar");
+    const [sortField, setSortField] = useState<SortField>("tanggal_keluar");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = useState(1);
     const perPage = 10;
@@ -88,7 +89,7 @@ export default function Page() {
             const response = await api.get<ApiListResponse<Pengeluaran>>("/pengeluaran", {
                 params: {
                     search: search || undefined,
-                    sort_field: sortField,
+                    sort_field: sortField === "total" ? "harga_satuan" : sortField,
                     sort_order: sortOrder,
                     page: currentPage,
                     per_page: perPage,
@@ -242,7 +243,7 @@ export default function Page() {
         }
     };
 
-    const handleSort = (field: keyof Pengeluaran) => {
+    const handleSort = (field: SortField) => {
         if (sortField === field) {
             setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
             return;
@@ -253,6 +254,16 @@ export default function Page() {
     };
 
     const totalPages = useMemo(() => Math.max(meta.last_page || 1, 1), [meta.last_page]);
+    const sortedData = useMemo(() => {
+        if (sortField !== "total") return data;
+        const rows = [...data];
+        rows.sort((a, b) => {
+            const aTotal = Number(a.qty) * Number(a.harga_satuan);
+            const bTotal = Number(b.qty) * Number(b.harga_satuan);
+            return sortOrder === "asc" ? aTotal - bTotal : bTotal - aTotal;
+        });
+        return rows;
+    }, [data, sortField, sortOrder]);
 
     return (
         <div className="p-6 space-y-6">
@@ -298,7 +309,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-gray-100">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_operasional")} className="flex items-center gap-2">
                                     Jenis Operasional <ArrowUpDown size={14} />
@@ -314,13 +329,21 @@ export default function Page() {
                                     Qty <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3">Satuan</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("satuan")} className="flex items-center gap-2">
+                                    Satuan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("harga_satuan")} className="flex items-center gap-2">
                                     Harga <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3">Total</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("total")} className="flex items-center gap-2">
+                                    Total <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -338,10 +361,10 @@ export default function Page() {
                                 </td>
                             </tr>
                         ) : (
-                            data.map((item, index) => (
+                            sortedData.map((item, index) => (
                                 <tr key={item.id} className="border-t">
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.nama_operasional}</td>
                                     <td className="p-3">{item.tanggal_keluar}</td>
@@ -558,3 +581,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

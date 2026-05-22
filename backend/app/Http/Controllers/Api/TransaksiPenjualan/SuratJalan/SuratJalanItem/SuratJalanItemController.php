@@ -8,6 +8,7 @@ use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\PenjualanItem;
 use App\Models\TransaksiPenjualan\SuratJalan;
 use App\Models\TransaksiPenjualan\SuratJalanItem;
+use App\Support\CacheInvalidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -89,6 +90,7 @@ class SuratJalanItemController extends Controller
     {
         $payload = $this->validatePayload($request);
         $item = $this->persistItem(new SuratJalanItem(), $suratJalan, $payload);
+        CacheInvalidation::flushDashboardSalesBySppg();
 
         return response()->json([
             'message' => 'Item surat jalan berhasil ditambahkan.',
@@ -112,6 +114,7 @@ class SuratJalanItemController extends Controller
         $this->ensureItemBelongsToSuratJalan($suratJalan, $item);
         $payload = $this->validatePayload($request);
         $item = $this->persistItem($item, $suratJalan, $payload);
+        CacheInvalidation::flushDashboardSalesBySppg();
 
         return response()->json([
             'message' => 'Item surat jalan berhasil diperbarui.',
@@ -123,6 +126,7 @@ class SuratJalanItemController extends Controller
     {
         $this->ensureItemBelongsToSuratJalan($suratJalan, $item);
         $item->delete();
+        CacheInvalidation::flushDashboardSalesBySppg();
 
         return response()->json([
             'message' => 'Item surat jalan berhasil dihapus.',

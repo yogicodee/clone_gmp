@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\LaporanAnalisa\LaporanStokBarang;
 
 use App\Http\Controllers\Controller;
+use App\Support\CacheInvalidation;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
 use App\Models\WarehouseSystem\WarehouseStokKering;
 use Carbon\Carbon;
@@ -10,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 
 class LaporanStokBarangController extends Controller
@@ -38,17 +40,39 @@ class LaporanStokBarangController extends Controller
         $perPage = $filters['per_page'] ?? 10;
         $page = $filters['page'] ?? 1;
 
-        $records = $this->collectStockRows($jenisStok, $gudangId, $periode, $tanggalAcuan)
-            ->when($search !== '', function (Collection $rows) use ($search): Collection {
-                return $rows->filter(function (array $row) use ($search): bool {
-                    return str_contains(strtolower($row['nama_barang']), $search)
-                        || str_contains(strtolower($row['nama_gudang'] ?? ''), $search)
-                        || str_contains(strtolower($row['jenis_stok'] ?? ''), $search);
-                })->values();
-            });
+        $cacheKey = sprintf(
+            'laporan_stok_barang:%s:%s:%s:%s:%s:%s',
+            $search !== '' ? md5($search) : 'all',
+            $gudangId ?? 'all',
+            $jenisStok ?? 'all',
+            $periode,
+            $tanggalAcuan->toDateString(),
+            $sortField.'-'.$sortOrder
+        );
 
-        $records = $this->sortRows($records, $sortField, $sortOrder);
-        $groupedByGudang = $this->groupRowsByGudang($records);
+        $cached = Cache::tags([CacheInvalidation::TAG_LAPORAN_STOK_BARANG])->remember($cacheKey, now()->addMinutes(5), function () use ($jenisStok, $gudangId, $periode, $tanggalAcuan, $search, $sortField, $sortOrder): array {
+            $records = $this->collectStockRows($jenisStok, $gudangId, $periode, $tanggalAcuan)
+                ->when($search !== '', function (Collection $rows) use ($search): Collection {
+                    return $rows->filter(function (array $row) use ($search): bool {
+                        return str_contains(strtolower($row['nama_barang']), $search)
+                            || str_contains(strtolower($row['nama_gudang'] ?? ''), $search)
+                            || str_contains(strtolower($row['jenis_stok'] ?? ''), $search);
+                    })->values();
+                });
+
+            $records = $this->sortRows($records, $sortField, $sortOrder)->values();
+
+            return [
+                'records' => $records->all(),
+                'summary' => [
+                    'total_qty' => round($records->sum('qty'), 2),
+                    'total_nilai_stok' => round($records->sum('nilai_stok'), 2),
+                    'per_gudang' => $this->groupRowsByGudang($records),
+                ],
+            ];
+        });
+
+        $records = collect($cached['records']);
 
         $paginator = new LengthAwarePaginator(
             $records->forPage($page, $perPage)->values(),
@@ -71,9 +95,9 @@ class LaporanStokBarangController extends Controller
                 'to' => $paginator->lastItem(),
             ],
             'summary' => [
-                'total_qty' => round($records->sum('qty'), 2),
-                'total_nilai_stok' => round($records->sum('nilai_stok'), 2),
-                'per_gudang' => $groupedByGudang,
+                'total_qty' => $cached['summary']['total_qty'],
+                'total_nilai_stok' => $cached['summary']['total_nilai_stok'],
+                'per_gudang' => $cached['summary']['per_gudang'],
             ],
         ]);
     }

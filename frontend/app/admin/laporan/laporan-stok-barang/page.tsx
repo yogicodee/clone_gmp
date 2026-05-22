@@ -55,7 +55,7 @@ type FilterState = {
     jenis_stok: "" | "kering" | "basah";
     periode: "harian" | "mingguan" | "bulanan" | "tahunan";
     tanggal: string;
-    sort_field: "nama_barang" | "nama_gudang" | "qty" | "satuan_terkecil" | "harga_beli" | "jenis_stok" | "nilai_stok" | "tanggal_masuk";
+    sort_field: "id" | "nama_barang" | "nama_gudang" | "qty" | "satuan_terkecil" | "harga_beli" | "jenis_stok" | "nilai_stok" | "tanggal_masuk";
     sort_order: "asc" | "desc";
     page: number;
 };
@@ -126,7 +126,7 @@ export default function Page() {
                     jenis_stok: filters.jenis_stok || undefined,
                     periode: filters.periode,
                     tanggal: filters.tanggal || undefined,
-                    sort_field: filters.sort_field,
+                    sort_field: filters.sort_field === "id" ? "nama_barang" : filters.sort_field,
                     sort_order: filters.sort_order,
                     page: filters.page,
                     per_page: 10,
@@ -219,6 +219,13 @@ export default function Page() {
     };
 
     const totalPages = Math.max(report?.meta.last_page ?? 1, 1);
+    const sortedRows = useMemo(() => {
+        const rows = report?.data ?? [];
+        if (filters.sort_field !== "id") return rows;
+        const copied = [...rows];
+        copied.sort((a, b) => (filters.sort_order === "asc" ? a.id - b.id : b.id - a.id));
+        return copied;
+    }, [report?.data, filters.sort_field, filters.sort_order]);
 
     return (
         <main className="space-y-6 rounded-3xl border border-white bg-white/30 p-6 backdrop-blur-2xl">
@@ -360,7 +367,11 @@ export default function Page() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-100">
                             <tr>
-                                <th className="p-3 text-left">No</th>
+                                <th className="p-3 text-left">
+                                    <button onClick={() => handleSort("id")} className="flex items-center gap-2">
+                                        No <ArrowUpDown size={14} />
+                                    </button>
+                                </th>
                                 <th className="p-3 text-left">
                                     <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
                                         Nama Barang <ArrowUpDown size={14} />
@@ -417,7 +428,7 @@ export default function Page() {
                                     </td>
                                 </tr>
                             ) : (
-                                report?.data.map((row, index) => (
+                                sortedRows.map((row, index) => (
                                     <tr key={`${row.jenis_stok}-${row.id}`} className="border-t">
                                         <td className="p-3">
                                             {((report.meta.current_page || 1) - 1) * (report.meta.per_page || 10) + index + 1}

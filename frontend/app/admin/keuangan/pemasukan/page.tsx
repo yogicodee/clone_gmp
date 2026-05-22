@@ -278,7 +278,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-gray-100">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id" as any)} className="flex items-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("tanggal")} className="flex items-center gap-2">
                                     Tanggal <ArrowUpDown size={14} />
@@ -319,7 +323,7 @@ export default function Page() {
                             data.map((item, index) => (
                                 <tr key={item.id} className="border-t">
                                     <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
+                                        {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * perPage + index + 1}
                                     </td>
                                     <td className="p-3">{item.tanggal}</td>
                                     <td className="p-3 capitalize">{formatJenis(item.jenis)}</td>
@@ -510,3 +514,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

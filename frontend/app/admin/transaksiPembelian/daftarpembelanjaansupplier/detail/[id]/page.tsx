@@ -91,14 +91,12 @@ export default function Page() {
     const perPage = 10;
 
     /* ================= FETCH ================= */
-    const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
-
     const fetchData = useCallback(async () => {
         try {
             setLoading(true);
             setError("");
 
-            const [detailRes, supplierRes, stokKeringRes, stokBasahRes] = await Promise.all([
+            const [detailRes, stokKeringRes, stokBasahRes] = await Promise.all([
                 api.get<ApiDetailResponse<DaftarPembelanjaanSupplierDetailResponse>>(
                     `/daftar-pembelanjaan-supplier/${daftarPembelanjaanId}`,
                     {
@@ -109,9 +107,6 @@ export default function Page() {
                         },
                     }
                 ),
-                api.get<ApiListResponse<SupplierOption>>("/supplier", {
-                    params: { per_page: 100 },
-                }),
                 api.get<ApiListResponse<WarehouseStockItem>>("/stok-kering", {
                     params: { per_page: 100 },
                 }),
@@ -130,7 +125,6 @@ export default function Page() {
             setSuppliers(data.suppliers ?? []);
             setMeta(data.meta ?? initialMeta);
             setSelectedSupplierId((prev) => prev ?? data.selected_supplier_id ?? null);
-            setSupplierOptions(supplierRes.data.data ?? []);
 
             const stockMap: Record<string, number> = {};
             const warehouseStocks = [
@@ -153,7 +147,7 @@ export default function Page() {
 
     const itemsWithSupplier = useMemo(() => {
         return items.map((item) => {
-            const supplier = supplierOptions.find(
+            const supplier = suppliers.map((group) => group.supplier).find(
                 (s) => s.id === item.supplier_id
             );
 
@@ -169,7 +163,7 @@ export default function Page() {
                 ),
             };
         });
-    }, [items, supplierOptions, warehouseStockMap]);
+    }, [items, suppliers, warehouseStockMap]);
 
 
     useEffect(() => {

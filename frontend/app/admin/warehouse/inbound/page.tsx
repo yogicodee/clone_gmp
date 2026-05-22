@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpDown, Pencil, Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
 import {
     extractErrorMessage,
@@ -68,9 +67,10 @@ export default function Page() {
     const [data, setData] = useState<Product[]>([]);
     const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
-    const { data: supplierData } = useFetch<SupplierOption>("/supplier?per_page=100");
-    const { data: gudangData } = useFetch<GudangOption>("/gudang?per_page=100");
-    const { data: produkData } = useFetch<ProdukOption>("/produk?per_page=100");
+    const [supplierData, setSupplierData] = useState<SupplierOption[]>([]);
+    const [gudangData, setGudangData] = useState<GudangOption[]>([]);
+    const [produkData, setProdukData] = useState<ProdukOption[]>([]);
+    const [loadingOptions, setLoadingOptions] = useState(false);
 
     const [form, setForm] = useState<FormType>({
         gudang_id: null,
@@ -148,6 +148,28 @@ export default function Page() {
         }
     };
 
+    const fetchFormOptions = async () => {
+        if (loadingOptions) return;
+        if (supplierData.length > 0 && gudangData.length > 0 && produkData.length > 0) return;
+
+        try {
+            setLoadingOptions(true);
+            const [supplierRes, gudangRes, produkRes] = await Promise.all([
+                api.get<ApiListResponse<SupplierOption>>("/supplier", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<GudangOption>>("/gudang", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<ProdukOption>>("/produk", { params: { per_page: 100 } }),
+            ]);
+
+            setSupplierData(supplierRes.data.data ?? []);
+            setGudangData(gudangRes.data.data ?? []);
+            setProdukData(produkRes.data.data ?? []);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoadingOptions(false);
+        }
+    };
+
     useEffect(() => {
         const timeout = window.setTimeout(() => {
             setSearch(searchInput.trim());
@@ -190,6 +212,7 @@ export default function Page() {
         setSuccessMessage("");
         setEditId(null);
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleSubmit = async () => {
@@ -270,6 +293,7 @@ export default function Page() {
         setErrorMessage("");
         setEditId(item.id);
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleDelete = async () => {

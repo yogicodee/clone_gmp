@@ -367,7 +367,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id" as any)} className="flex items-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button
                                     onClick={() => handleSort("nama_barang")}
@@ -423,9 +427,7 @@ export default function Page() {
                                     key={item.id}
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
-                                    <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * perPage + index + 1}
-                                    </td>
+                                    <td className="p-3 text-center">{item.id}</td>
                                     <td className="p-3">{item.nama_barang}</td>
                                     <td className="p-3">{formatQty(item.qty)}</td>
                                     <td className="p-3">{item.satuan}</td>
@@ -659,3 +661,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

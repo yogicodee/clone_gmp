@@ -21,7 +21,7 @@ type FormType = {
     keterangan: string;
 };
 
-type SortField = "tanggal_pesan" | "tanggal_dikirim" | "nama_pembeli";
+type SortField = "id" | "tanggal_pesan" | "tanggal_dikirim" | "nama_pembeli" | "keterangan";
 
 const initialForm: FormType = {
     tanggal_pesan: "",
@@ -232,11 +232,15 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button
                                     onClick={() => handleSort("tanggal_pesan")}
-                                    className="flex items-center gap-2"
+                                    className="flex w-full items-center justify-center gap-2"
                                 >
                                     Tgl Pesan <ArrowUpDown size={14} />
                                 </button>
@@ -257,7 +261,14 @@ export default function Page() {
                                     Nama <ArrowUpDown size={14} />
                                 </button>
                             </th>
-                            <th className="p-3 text-left">Keterangan</th>
+                            <th className="p-3">
+                                <button
+                                    onClick={() => handleSort("keterangan")}
+                                    className="flex items-center gap-2"
+                                >
+                                    Keterangan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -280,10 +291,8 @@ export default function Page() {
                                     key={item.id}
                                     className="border-t border-primary/20 hover:bg-white/50"
                                 >
-                                    <td className="p-3 text-center">
-                                        {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
-                                    </td>
-                                    <td className="p-3">{item.tanggal_pesan}</td>
+                                    <td className="p-3 text-center">{item.id}</td>
+                                    <td className="p-3 text-center">{item.tanggal_pesan}</td>
                                     <td className="p-3">{item.tanggal_dikirim ?? "-"}</td>
                                     <td className="p-3">{item.nama_pembeli}</td>
                                     <td className="p-3">{item.keterangan ?? "-"}</td>
@@ -478,3 +487,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

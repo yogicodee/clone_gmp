@@ -245,7 +245,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id" as any)} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3">
                                 <button onClick={() => handleSort("kode")} className="flex items-center gap-2">
                                     Kode <ArrowUpDown size={14} />
@@ -264,7 +268,7 @@ export default function Page() {
                         {data.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
+                                    {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                 </td>
                                 <td className="p-3 font-semibold">{item.kode}</td>
                                 <td className="p-3">{item.nama_satuan}</td>
@@ -431,3 +435,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

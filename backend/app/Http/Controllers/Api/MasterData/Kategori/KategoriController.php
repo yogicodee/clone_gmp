@@ -96,7 +96,7 @@ class KategoriController extends Controller
      */
     private function validatePayload(Request $request, ?Kategori $kategori = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'kode' => [
                 'required',
                 'string',
@@ -109,5 +109,23 @@ class KategoriController extends Controller
             'kode.regex' => 'Kode hanya boleh berisi huruf kapital, angka, dan tanda minus (-).',
             'kode.unique' => 'Kode sudah digunakan.',
         ]);
+
+        $normalizedNamaSatuan = mb_strtolower(trim($payload['nama_satuan']));
+
+        $duplicateExists = Kategori::query()
+            ->when($kategori !== null, fn ($query) => $query->whereKeyNot($kategori->id))
+            ->whereRaw('LOWER(TRIM(nama_satuan)) = ?', [$normalizedNamaSatuan])
+            ->exists();
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Nama satuan sudah digunakan.',
+                'errors' => [
+                    'nama_satuan' => ['Nama satuan sudah digunakan.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
     }
 }

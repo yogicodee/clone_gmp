@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pencil, Trash2, Plus, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useFetch } from "@/hooks/useFetch";
 import api from "@/lib/api";
 import {
     extractErrorMessage,
@@ -121,9 +120,10 @@ export default function Page() {
     const [data, setData] = useState<ReturItem[]>([]);
     const [meta, setMeta] = useState<Meta>(initialMeta);
     const [loading, setLoading] = useState(true);
-    const { data: gudangData } = useFetch<GudangOption>("/gudang?per_page=100");
-    const { data: stokKeringData } = useFetch<StockItem>("/stok-kering?per_page=100");
-    const { data: stokBasahData } = useFetch<StockItem>("/stok-basah?per_page=100");
+    const [gudangData, setGudangData] = useState<GudangOption[]>([]);
+    const [stokKeringData, setStokKeringData] = useState<StockItem[]>([]);
+    const [stokBasahData, setStokBasahData] = useState<StockItem[]>([]);
+    const [loadingOptions, setLoadingOptions] = useState(false);
 
     const [form, setForm] = useState<FormType>({
         gudang_id: null,
@@ -239,6 +239,28 @@ export default function Page() {
         }
     };
 
+    const fetchFormOptions = async () => {
+        if (loadingOptions) return;
+        if (gudangData.length > 0 && stokKeringData.length > 0 && stokBasahData.length > 0) return;
+
+        try {
+            setLoadingOptions(true);
+            const [gudangRes, stokKeringRes, stokBasahRes] = await Promise.all([
+                api.get<ApiListResponse<GudangOption>>("/gudang", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<StockItem>>("/stok-kering", { params: { per_page: 100 } }),
+                api.get<ApiListResponse<StockItem>>("/stok-basah", { params: { per_page: 100 } }),
+            ]);
+
+            setGudangData(gudangRes.data.data ?? []);
+            setStokKeringData(stokKeringRes.data.data ?? []);
+            setStokBasahData(stokBasahRes.data.data ?? []);
+        } catch (error) {
+            setErrorMessage(extractErrorMessage(error));
+        } finally {
+            setLoadingOptions(false);
+        }
+    };
+
     useEffect(() => {
         const timeout = window.setTimeout(() => {
             setSearch(searchInput.trim());
@@ -285,6 +307,7 @@ export default function Page() {
         resetForm();
         setSuccessMessage("");
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleSubmit = async () => {
@@ -372,6 +395,7 @@ export default function Page() {
         setErrorMessage("");
         setEditId(item.id);
         setOpenForm(true);
+        void fetchFormOptions();
     };
 
     const handleDelete = async () => {
@@ -434,7 +458,11 @@ export default function Page() {
                 <table className="w-full text-sm">
                     <thead className="bg-white shadow-lg">
                         <tr>
-                            <th className="p-3">No</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("id" as any)} className="flex w-full items-center justify-center gap-2">
+                                    No <ArrowUpDown size={14} />
+                                </button>
+                            </th>
 
                             <th className="p-3">
                                 <button onClick={() => handleSort("nama_barang")} className="flex items-center gap-2">
@@ -442,12 +470,36 @@ export default function Page() {
                                 </button>
                             </th>
 
-                            <th className="p-3 text-left">Gudang</th>
-                            <th className="p-3 text-left">Jenis Stok</th>
-                            <th className="p-3 text-left">Qty Retur</th>
-                            <th className="p-3 text-left">Satuan</th>
-                            <th className="p-3 text-left">Harga Beli</th>
-                            <th className="p-3 text-left">Alasan</th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("gudang_id")} className="flex items-center gap-2">
+                                    Gudang <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("jenis_stok")} className="flex items-center gap-2">
+                                    Jenis Stok <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("qty_retur")} className="flex items-center gap-2">
+                                    Qty Retur <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("satuan_terkecil")} className="flex items-center gap-2">
+                                    Satuan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("harga_beli")} className="flex items-center gap-2">
+                                    Harga Beli <ArrowUpDown size={14} />
+                                </button>
+                            </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("alasan")} className="flex items-center gap-2">
+                                    Alasan <ArrowUpDown size={14} />
+                                </button>
+                            </th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -456,7 +508,7 @@ export default function Page() {
                         {data.map((item, index) => (
                             <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                                 <td className="p-3 text-center">
-                                    {((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
+                                    {sortField === "id" ? item.id : ((meta.current_page || 1) - 1) * (meta.per_page || perPage) + index + 1}
                                 </td>
 
                                 <td className="p-3">{item.nama_barang}</td>
@@ -528,6 +580,11 @@ export default function Page() {
                             {errorMessage ? (
                                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                                     {errorMessage}
+                                </div>
+                            ) : null}
+                            {loadingOptions ? (
+                                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                                    Memuat opsi gudang dan stok...
                                 </div>
                             ) : null}
 
@@ -723,3 +780,5 @@ function Modal({
         </motion.div>
     );
 }
+
+

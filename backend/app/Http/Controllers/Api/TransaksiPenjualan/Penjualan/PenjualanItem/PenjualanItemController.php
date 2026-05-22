@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\PenjualanItem;
+use App\Support\CacheInvalidation;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
 use App\Models\WarehouseSystem\WarehouseStokKering;
 use Illuminate\Http\JsonResponse;
@@ -131,6 +132,7 @@ class PenjualanItemController extends Controller
 
             return $item;
         });
+        CacheInvalidation::flushFinancialCaches();
 
         return response()->json([
             'message' => 'Item penjualan berhasil ditambahkan.',
@@ -159,6 +161,7 @@ class PenjualanItemController extends Controller
 
             return $updatedItem;
         });
+        CacheInvalidation::flushFinancialCaches();
 
         return response()->json([
             'message' => 'Item penjualan berhasil diperbarui.',
@@ -174,6 +177,7 @@ class PenjualanItemController extends Controller
             $item->delete();
             $this->refreshParentTotal($penjualan);
         });
+        CacheInvalidation::flushFinancialCaches();
 
         return response()->json([
             'message' => 'Item penjualan berhasil dihapus.',

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\TransaksiPenjualan\TandaTerima;
 
 use App\Http\Controllers\Controller;
+use App\Support\CacheInvalidation;
 use App\Models\TransaksiPembelian\OrderPenawaranItem;
 use App\Models\TransaksiPenjualan\Penjualan;
 use App\Models\TransaksiPenjualan\SuratJalan;
@@ -86,6 +87,7 @@ class TandaTerimaController extends Controller
                 return $this->syncFromSuratJalan($suratJalan);
             })
             ->values();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data tanda terima berhasil disinkronkan dari surat jalan.',
@@ -122,6 +124,7 @@ class TandaTerimaController extends Controller
     public function update(Request $request, TandaTerima $tandaTerima): JsonResponse
     {
         $tandaTerima->update($this->validatePayload($request, $tandaTerima));
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data tanda terima berhasil diperbarui.',
@@ -132,6 +135,7 @@ class TandaTerimaController extends Controller
     public function destroy(TandaTerima $tandaTerima): JsonResponse
     {
         $tandaTerima->delete();
+        CacheInvalidation::flushLabaRugiTransaksional();
 
         return response()->json([
             'message' => 'Data tanda terima berhasil dihapus.',

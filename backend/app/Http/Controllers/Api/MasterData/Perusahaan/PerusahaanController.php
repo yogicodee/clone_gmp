@@ -73,7 +73,7 @@ class PerusahaanController extends Controller
 
     public function update(Request $request, Perusahaan $perusahaan): JsonResponse
     {
-        $payload = $this->validatePayload($request);
+        $payload = $this->validatePayload($request, $perusahaan);
 
         $perusahaan->update($payload);
 
@@ -95,12 +95,34 @@ class PerusahaanController extends Controller
     /**
      * @return array{nama_perusahaan: string, alamat: string, nama_pic: string}
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ?Perusahaan $ignorePerusahaan = null): array
     {
-        return $request->validate([
+        $payload = $request->validate([
             'nama_perusahaan' => ['required', 'string', 'max:100'],
             'alamat' => ['required', 'string'],
             'nama_pic' => ['required', 'string', 'max:100'],
         ]);
+
+        $normalizedNamaPerusahaan = mb_strtolower(trim($payload['nama_perusahaan']));
+        $normalizedAlamat = mb_strtolower(trim($payload['alamat']));
+        $normalizedNamaPic = mb_strtolower(trim($payload['nama_pic']));
+
+        $duplicateExists = Perusahaan::query()
+            ->when($ignorePerusahaan !== null, fn ($query) => $query->whereKeyNot($ignorePerusahaan->id))
+            ->whereRaw('LOWER(TRIM(nama_perusahaan)) = ?', [$normalizedNamaPerusahaan])
+            ->whereRaw('LOWER(TRIM(alamat)) = ?', [$normalizedAlamat])
+            ->whereRaw('LOWER(TRIM(nama_pic)) = ?', [$normalizedNamaPic])
+            ->exists();
+
+        if ($duplicateExists) {
+            abort(response()->json([
+                'message' => 'Perusahaan dengan nama perusahaan, alamat, dan PIC yang sama sudah ada.',
+                'errors' => [
+                    'nama_perusahaan' => ['Perusahaan dengan nama perusahaan, alamat, dan PIC yang sama sudah ada.'],
+                ],
+            ], 422));
+        }
+
+        return $payload;
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\WarehouseSystem\WarehouseInbound;
 
 use App\Http\Controllers\Controller;
+use App\Support\CacheInvalidation;
 use App\Models\WarehouseSystem\WarehouseInbound;
 use App\Models\WarehouseSystem\WarehouseStokBasah;
 use App\Models\WarehouseSystem\WarehouseStokKering;
@@ -76,6 +77,7 @@ class WarehouseInboundController extends Controller
 
             return $record;
         });
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data inbound berhasil ditambahkan.',
@@ -100,6 +102,7 @@ class WarehouseInboundController extends Controller
             $inbound->update($payload);
             $this->syncStockFromInbound($inbound->fresh());
         });
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data inbound berhasil diperbarui.',
@@ -113,6 +116,7 @@ class WarehouseInboundController extends Controller
             $this->deleteSyncedStockRecords($inbound->id);
             $inbound->delete();
         });
+        CacheInvalidation::flushStockCaches();
 
         return response()->json([
             'message' => 'Data inbound berhasil dihapus.',
