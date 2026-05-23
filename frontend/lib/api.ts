@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL: "https://backend-kubh.onrender.com/api",
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -25,7 +25,9 @@ api.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
     const requestUrl = error?.config?.url ?? "";
-    const isAuthRequest = typeof requestUrl === "string" && requestUrl.includes("/auth/login");
+    const isAuthRequest =
+      typeof requestUrl === "string" &&
+      requestUrl.includes("/auth/login");
 
     if (
       typeof window !== "undefined" &&
