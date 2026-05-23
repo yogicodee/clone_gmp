@@ -24,7 +24,7 @@ class LaporanStokBarangController extends Controller
             'jenis_stok' => ['nullable', Rule::in(['kering', 'basah'])],
             'periode' => ['nullable', Rule::in(['harian', 'mingguan', 'bulanan', 'tahunan'])],
             'tanggal' => ['nullable', 'date'],
-            'sort_field' => ['nullable', Rule::in(['nama_barang', 'nama_gudang', 'qty', 'satuan_terkecil', 'harga_beli', 'jenis_stok', 'nilai_stok', 'tanggal_masuk'])],
+            'sort_field' => ['nullable', Rule::in(['id', 'nama_barang', 'nama_gudang', 'qty', 'satuan_terkecil', 'harga_beli', 'jenis_stok', 'nilai_stok', 'tanggal_masuk'])],
             'sort_order' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],

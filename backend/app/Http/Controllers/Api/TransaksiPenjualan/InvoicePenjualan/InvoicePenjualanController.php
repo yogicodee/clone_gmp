@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -42,7 +43,7 @@ class InvoicePenjualanController extends Controller
                 'sppg:id,nama_sppg,alamat,no_penanggungjawab',
                 'accounting:id,nama,jabatan,status',
                 'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
-                'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+                'perusahaan:id,nama_perusahaan,alamat,nama_pic,tema_invoice,logo_path',
             ])
             ->when($search, function ($query, string $keyword): void {
                 $query->where(function ($subQuery) use ($keyword): void {
@@ -152,7 +153,7 @@ class InvoicePenjualanController extends Controller
     {
         $options = Perusahaan::query()
             ->orderBy('nama_perusahaan')
-            ->get(['id', 'nama_perusahaan', 'alamat', 'nama_pic']);
+            ->get(['id', 'nama_perusahaan', 'alamat', 'nama_pic', 'tema_invoice', 'logo_path']);
 
         return response()->json([
             'message' => 'Opsi perusahaan invoice berhasil diambil.',
@@ -175,7 +176,7 @@ class InvoicePenjualanController extends Controller
                     'sppg:id,nama_sppg,alamat,no_penanggungjawab',
                     'accounting:id,nama,jabatan,status',
                     'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
-                    'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+                    'perusahaan:id,nama_perusahaan,alamat,nama_pic,tema_invoice,logo_path',
                 ])
             ),
         ], 201);
@@ -188,7 +189,7 @@ class InvoicePenjualanController extends Controller
             'sppg:id,nama_sppg,alamat,no_penanggungjawab',
             'accounting:id,nama,jabatan,status',
             'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
-            'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+            'perusahaan:id,nama_perusahaan,alamat,nama_pic,tema_invoice,logo_path',
         ]);
 
         return response()->json([
@@ -212,7 +213,7 @@ class InvoicePenjualanController extends Controller
                     'sppg:id,nama_sppg,alamat,no_penanggungjawab',
                     'accounting:id,nama,jabatan,status',
                     'bankRekening:id,nama_bank,no_rek,atas_nama,cabang',
-                    'perusahaan:id,nama_perusahaan,alamat,nama_pic',
+                    'perusahaan:id,nama_perusahaan,alamat,nama_pic,tema_invoice,logo_path',
                 ])
             ),
         ]);
@@ -355,6 +356,8 @@ class InvoicePenjualanController extends Controller
             'cabang_bank' => $invoicePenjualan->bankRekening?->cabang,
             'perusahaan_id' => $invoicePenjualan->perusahaan_id,
             'perusahaan' => $invoicePenjualan->perusahaan?->nama_perusahaan,
+            'perusahaan_logo_url' => $invoicePenjualan->perusahaan?->logo_url,
+            'perusahaan_tema_invoice' => $invoicePenjualan->perusahaan?->tema_invoice ?? 'theme_01',
             'sppg' => $sppg?->nama_sppg,
             'alamat' => $sppg?->alamat,
             'no_hp' => $sppg?->no_penanggungjawab,
@@ -366,6 +369,7 @@ class InvoicePenjualanController extends Controller
 
         if ($includeDetailItems) {
             $data['detail_items'] = $detailItems->values()->all();
+            $data['perusahaan_logo_data_url'] = $this->resolvePerusahaanLogoDataUrl($invoicePenjualan->perusahaan?->getRawOriginal('logo_path'));
         }
 
         return $data;
@@ -428,5 +432,23 @@ class InvoicePenjualanController extends Controller
             })
             ->orderBy('id')
             ->get();
+    }
+
+    private function resolvePerusahaanLogoDataUrl(?string $logoPath): ?string
+    {
+        if (! $logoPath || ! Storage::disk('public')->exists($logoPath)) {
+            return null;
+        }
+
+        $extension = Str::lower(pathinfo($logoPath, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
+
+        $binary = Storage::disk('public')->get($logoPath);
+
+        return 'data:'.$mime.';base64,'.base64_encode($binary);
     }
 }

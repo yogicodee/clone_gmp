@@ -9,6 +9,7 @@ import {
     type ApiListResponse,
     type Meta,
 } from "@/lib/transaksiPembelian";
+import { DEFAULT_INVOICE_THEME_CODE, INVOICE_THEMES } from "@/lib/invoiceThemes";
 import axios from "axios";
 
 /* ================= TYPE ================= */
@@ -17,9 +18,16 @@ type Product = {
     nama_perusahaan: string;
     alamat: string;
     nama_pic: string;
+    tema_invoice: string;
+    logo_url: string | null;
 };
 
-type FormType = Omit<Product, "id">;
+type FormType = {
+    nama_perusahaan: string;
+    alamat: string;
+    nama_pic: string;
+    tema_invoice: string;
+};
 type FieldErrors = Partial<Record<keyof FormType, string>>;
 
 const initialMeta: Meta = {
@@ -40,7 +48,10 @@ export default function Page() {
         nama_perusahaan: "",
         alamat: "",
         nama_pic: "",
+        tema_invoice: DEFAULT_INVOICE_THEME_CODE,
     });
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 
     const [editId, setEditId] = useState<number | null>(null);
     const [openForm, setOpenForm] = useState(false);
@@ -106,6 +117,7 @@ export default function Page() {
         if (!form.nama_perusahaan.trim()) nextFieldErrors.nama_perusahaan = "Nama perusahaan wajib diisi.";
         if (!form.alamat.trim()) nextFieldErrors.alamat = "Alamat wajib diisi.";
         if (!form.nama_pic.trim()) nextFieldErrors.nama_pic = "Nama PIC wajib diisi.";
+        if (!form.tema_invoice.trim()) nextFieldErrors.tema_invoice = "Tema perusahaan wajib dipilih.";
 
         if (Object.keys(nextFieldErrors).length > 0) {
             setFieldErrors(nextFieldErrors);
@@ -118,11 +130,25 @@ export default function Page() {
             setErrorMessage("");
             setSuccessMessage("");
 
+            const formData = new FormData();
+            formData.append("nama_perusahaan", form.nama_perusahaan);
+            formData.append("alamat", form.alamat);
+            formData.append("nama_pic", form.nama_pic);
+            formData.append("tema_invoice", form.tema_invoice);
+            if (logoFile) {
+                formData.append("logo", logoFile);
+            }
+
             if (editId) {
-                await api.put(`/perusahaan/${editId}`, form);
+                formData.append("_method", "PUT");
+                await api.post(`/perusahaan/${editId}`, formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
                 setSuccessMessage("Perusahaan berhasil diperbarui.");
             } else {
-                await api.post("/perusahaan", form);
+                await api.post("/perusahaan", formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
                 setSuccessMessage("Perusahaan berhasil ditambahkan.");
             }
 
@@ -157,9 +183,15 @@ export default function Page() {
     };
 
     const handleEdit = (item: Product) => {
-        const { id, ...rest } = item;
-        setForm(rest);
-        setEditId(id);
+        setForm({
+            nama_perusahaan: item.nama_perusahaan,
+            alamat: item.alamat,
+            nama_pic: item.nama_pic,
+            tema_invoice: item.tema_invoice || DEFAULT_INVOICE_THEME_CODE,
+        });
+        setLogoFile(null);
+        setLogoPreviewUrl(item.logo_url);
+        setEditId(item.id);
         setOpenForm(true);
     };
 
@@ -184,7 +216,9 @@ export default function Page() {
     };
 
     const resetForm = () => {
-        setForm({ nama_perusahaan: "", alamat: "", nama_pic: "" });
+        setForm({ nama_perusahaan: "", alamat: "", nama_pic: "", tema_invoice: DEFAULT_INVOICE_THEME_CODE });
+        setLogoFile(null);
+        setLogoPreviewUrl(null);
         setFieldErrors({});
         setEditId(null);
         setOpenForm(false);
@@ -229,7 +263,15 @@ export default function Page() {
                 />
 
                 <button
-                    onClick={() => setOpenForm(true)}
+                    onClick={() => {
+                        setForm({ nama_perusahaan: "", alamat: "", nama_pic: "", tema_invoice: DEFAULT_INVOICE_THEME_CODE });
+                        setLogoFile(null);
+                        setLogoPreviewUrl(null);
+                        setFieldErrors({});
+                        setEditId(null);
+                        setErrorMessage("");
+                        setOpenForm(true);
+                    }}
                     className="flex items-center gap-2 bg-linear-to-t from-secondary via-primary to-secondary shadow-lg shadow-black/20 text-white px-4 py-2 rounded-lg hover:-translate-y-1 transition cursor-pointer"
                 >
                     <Plus size={16} />
@@ -243,7 +285,7 @@ export default function Page() {
                     <thead className="bg-white shadow-lg">
                         <tr>
                             <th className="p-3">
-                                <button onClick={() => handleSort("id" as any)} className="flex w-full items-center justify-center gap-2">
+                                <button onClick={() => handleSort("id")} className="flex w-full items-center justify-center gap-2">
                                     No <ArrowUpDown size={14} />
                                 </button>
                             </th>
@@ -265,7 +307,13 @@ export default function Page() {
                                     Nama PIC <ArrowUpDown size={14} />
                                 </button>
                             </th>
+                            <th className="p-3">
+                                <button onClick={() => handleSort("tema_invoice")} className="flex items-center gap-2">
+                                    Tema <ArrowUpDown size={14} />
+                                </button>
+                            </th>
 
+                            <th className="p-3 text-center">Logo</th>
                             <th className="p-3 text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -279,6 +327,26 @@ export default function Page() {
                                 <td className="p-3">{item.nama_perusahaan}</td>
                                 <td className="p-3">{item.alamat}</td>
                                 <td className="p-3">{item.nama_pic}</td>
+                                <td className="p-3">{INVOICE_THEMES.find((theme) => theme.code === item.tema_invoice)?.label ?? "Maroon Klasik"}</td>
+                                <td className="p-3 text-center">
+                                    {item.logo_url ? (
+                                        <a
+                                            href={item.logo_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Buka logo di tab baru"
+                                            className="inline-block"
+                                        >
+                                            <img
+                                                src={item.logo_url}
+                                                alt={`Logo ${item.nama_perusahaan}`}
+                                                className="mx-auto h-10 w-10 rounded object-contain border border-gray-200 bg-white p-1 cursor-pointer hover:opacity-80"
+                                            />
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs text-gray-400">-</span>
+                                    )}
+                                </td>
 
                                 <td className="p-3 flex justify-center gap-2">
                                     <button
@@ -382,6 +450,55 @@ export default function Page() {
                                 className={`w-full border p-2 rounded-md ${fieldErrors.nama_pic ? "border-red-500 focus:outline-red-500" : ""}`}
                             />
                             {fieldErrors.nama_pic ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.nama_pic}</p> : null}
+
+                            <div className="space-y-1">
+                                <label className="text-sm text-gray-700">Tema Perusahaan</label>
+                                <select
+                                    value={form.tema_invoice}
+                                    onChange={(e) => {
+                                        setForm({ ...form, tema_invoice: e.target.value });
+                                        setFieldErrors((prev) => ({ ...prev, tema_invoice: undefined }));
+                                        setErrorMessage("");
+                                    }}
+                                    className={`w-full border p-2 rounded-md ${fieldErrors.tema_invoice ? "border-red-500 focus:outline-red-500" : ""}`}
+                                >
+                                    {INVOICE_THEMES.map((theme) => (
+                                        <option key={theme.code} value={theme.code}>
+                                            {theme.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                {fieldErrors.tema_invoice ? <p className="text-xs text-red-600 -mt-2">{fieldErrors.tema_invoice}</p> : null}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Logo Perusahaan (opsional)</label>
+                                <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                                    onChange={(e) => {
+                                        const selectedFile = e.target.files?.[0] ?? null;
+                                        setLogoFile(selectedFile);
+                                        setErrorMessage("");
+                                        if (selectedFile) {
+                                            setLogoPreviewUrl(URL.createObjectURL(selectedFile));
+                                        } else if (editId) {
+                                            setLogoPreviewUrl((prev) => prev);
+                                        } else {
+                                            setLogoPreviewUrl(null);
+                                        }
+                                    }}
+                                    className="w-full border p-2 rounded-md"
+                                />
+                                {logoPreviewUrl ? (
+                                    <img
+                                        src={logoPreviewUrl}
+                                        alt="Preview logo perusahaan"
+                                        className="h-16 w-16 rounded object-contain border border-gray-200 bg-white p-1"
+                                    />
+                                ) : null}
+                                <p className="text-xs text-gray-500">Format: JPG/PNG/WEBP, maksimal 2MB.</p>
+                            </div>
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={resetForm} className="px-4 py-2 bg-gray-200 rounded-md">

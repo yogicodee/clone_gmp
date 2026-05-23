@@ -126,7 +126,7 @@ export default function Page() {
                     jenis_stok: filters.jenis_stok || undefined,
                     periode: filters.periode,
                     tanggal: filters.tanggal || undefined,
-                    sort_field: filters.sort_field === "id" ? "nama_barang" : filters.sort_field,
+                    sort_field: filters.sort_field,
                     sort_order: filters.sort_order,
                     page: filters.page,
                     per_page: 10,
@@ -143,7 +143,6 @@ export default function Page() {
     };
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         void fetchGudangOptions();
     }, []);
 
@@ -160,7 +159,6 @@ export default function Page() {
     }, [draftSearch]);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         void fetchReport();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filters]);
@@ -219,13 +217,7 @@ export default function Page() {
     };
 
     const totalPages = Math.max(report?.meta.last_page ?? 1, 1);
-    const sortedRows = useMemo(() => {
-        const rows = report?.data ?? [];
-        if (filters.sort_field !== "id") return rows;
-        const copied = [...rows];
-        copied.sort((a, b) => (filters.sort_order === "asc" ? a.id - b.id : b.id - a.id));
-        return copied;
-    }, [report?.data, filters.sort_field, filters.sort_order]);
+    const sortedRows = report?.data ?? [];
 
     return (
         <main className="space-y-6 rounded-3xl border border-white bg-white/30 p-6 backdrop-blur-2xl">
@@ -431,7 +423,9 @@ export default function Page() {
                                 sortedRows.map((row, index) => (
                                     <tr key={`${row.jenis_stok}-${row.id}`} className="border-t">
                                         <td className="p-3">
-                                            {((report.meta.current_page || 1) - 1) * (report.meta.per_page || 10) + index + 1}
+                                            {filters.sort_field === "id"
+                                                ? row.id
+                                                : ((report.meta.current_page || 1) - 1) * (report.meta.per_page || 10) + index + 1}
                                         </td>
                                         <td className="p-3">{row.nama_barang}</td>
                                         <td className="p-3">{row.nama_gudang ?? "-"}</td>

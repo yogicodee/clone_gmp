@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
+import { getInvoiceTheme } from "@/lib/invoiceThemes";
 
 type PaymentStatus = "lunas" | "belum lunas";
 
@@ -34,6 +35,9 @@ type InvoiceRecord = {
   cabang_bank: string | null;
   perusahaan_id: number | null;
   perusahaan: string | null;
+  perusahaan_logo_url?: string | null;
+  perusahaan_logo_data_url?: string | null;
+  perusahaan_tema_invoice?: string | null;
   sppg: string | null;
   alamat: string | null;
   no_hp: string | null;
@@ -72,6 +76,8 @@ type PerusahaanOption = {
   nama_perusahaan: string;
   alamat: string;
   nama_pic: string;
+  tema_invoice: string;
+  logo_url: string | null;
 };
 
 type FormType = {
@@ -138,16 +144,17 @@ const loadImageAsDataUrl = async (imagePath: string) => {
   });
 };
 
-const drawInvoiceCornerOrnaments = (doc: jsPDF) => {
-  doc.setFillColor(226, 89, 70);
+const drawInvoiceCornerOrnaments = (doc: jsPDF, temaCode?: string | null) => {
+  const theme = getInvoiceTheme(temaCode);
+  doc.setFillColor(...theme.primary);
   doc.triangle(126, 0, 210, 0, 210, 29, "F");
   doc.triangle(0, 255, 0, 297, 37, 297, "F");
 
-  doc.setFillColor(188, 55, 42);
+  doc.setFillColor(...theme.secondary);
   doc.triangle(138, 0, 210, 0, 210, 20, "F");
   doc.triangle(0, 267, 0, 297, 26, 297, "F");
 
-  doc.setFillColor(238, 210, 123);
+  doc.setFillColor(...theme.accent);
   doc.triangle(157, 0, 210, 0, 210, 11, "F");
   doc.triangle(0, 279, 0, 297, 14, 297, "F");
 
@@ -156,9 +163,13 @@ const drawInvoiceCornerOrnaments = (doc: jsPDF) => {
   doc.triangle(0, 248, 7, 297, 18, 297, "F");
 };
 
-const drawInvoicePdfHeader = (doc: jsPDF, headerImage: string) => {
-  drawInvoiceCornerOrnaments(doc);
-  doc.addImage(headerImage, "PNG", 12, 8, 88, 24);
+const drawInvoicePdfHeader = (
+  doc: jsPDF,
+  temaCode: string | null | undefined,
+  logoImageDataUrl: string,
+) => {
+  drawInvoiceCornerOrnaments(doc, temaCode);
+  doc.addImage(logoImageDataUrl, "PNG", 12, 8, 46, 20);
 };
 
 const logUnexpectedError = (error: unknown) => {
@@ -524,13 +535,30 @@ export default function Page() {
         format: "a4",
       });
 
-      const headerImage = await loadImageAsDataUrl("/invoice-header.png");
-      drawInvoicePdfHeader(doc, headerImage);
+      const theme = getInvoiceTheme(detailTarget.perusahaan_tema_invoice);
+      let logoImage = detailTarget.perusahaan_logo_data_url ?? null;
+
+      if (!logoImage && detailTarget.perusahaan_logo_url) {
+        try {
+          logoImage = await loadImageAsDataUrl(detailTarget.perusahaan_logo_url);
+        } catch {
+          logoImage = null;
+        }
+      }
+
+      if (!logoImage) {
+        logoImage = await loadImageAsDataUrl("/invoice-header.png");
+      }
+
+      const finalLogoImage = logoImage;
+      drawInvoicePdfHeader(doc, detailTarget.perusahaan_tema_invoice, finalLogoImage);
 
       doc.setFont("times", "bold");
       doc.setFontSize(21);
+      doc.setTextColor(...theme.textStrong);
       doc.text("INVOICE", 105, 42, { align: "center" });
       doc.setLineWidth(0.6);
+      doc.setDrawColor(...theme.secondary);
       doc.line(88, 44, 122, 44);
 
       doc.setFont("times", "normal");
@@ -561,10 +589,12 @@ export default function Page() {
         const tableStartY = labelPesananY + 4;
 
         doc.setLineWidth(0.5);
+        doc.setDrawColor(...theme.tableLine);
         doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight);
         doc.line(infoBoxMiddleX, infoBoxTop, infoBoxMiddleX, infoBoxBottom);
         doc.setFont("times", "normal");
         doc.setFontSize(11);
+        doc.setTextColor(20, 20, 20);
 
         leftLines.forEach((line, index) => {
           doc.text(line, infoBoxLeft + 2, infoBoxTop + 8 + index * lineGap);
@@ -582,19 +612,19 @@ export default function Page() {
         styles: {
           font: "times",
           fontSize: 10,
-          lineColor: [120, 120, 120],
+          lineColor: theme.tableLine,
           lineWidth: 0.15,
           cellPadding: 2.5,
           textColor: [20, 20, 20],
         },
         headStyles: {
-          fillColor: [255, 255, 255],
-          textColor: [20, 20, 20],
+          fillColor: theme.tableHeaderBg,
+          textColor: theme.tableHeaderText,
           fontStyle: "bold",
         },
         didDrawPage: (data) => {
           if (data.pageNumber > 1) {
-            drawInvoicePdfHeader(doc, headerImage);
+            drawInvoicePdfHeader(doc, detailTarget.perusahaan_tema_invoice, finalLogoImage);
           }
         },
         columnStyles: {
@@ -628,6 +658,7 @@ export default function Page() {
       const footerY = Math.min(tableFinalY + 22, 248);
       doc.setFont("times", "normal");
       doc.setFontSize(11);
+      doc.setTextColor(...theme.textStrong);
       doc.text(`Jombang, ${formatTanggalIndonesiaPanjang(detailTarget.tanggal_invoice)}`, 150, footerY, { align: "center" });
       doc.text("Accounting Koperasi", 150, footerY + 8, { align: "center" });
       doc.text(`(${detailTarget.accounting ?? ""})`, 150, footerY + 34, { align: "center" });
@@ -749,7 +780,7 @@ export default function Page() {
                 </td>
               </tr>
             ) : sortedData.length > 0 ? (
-              sortedData.map((item, index) => (
+              sortedData.map((item) => (
                 <tr key={item.id} className="border-t border-primary/20 hover:bg-white/50">
                   <td className="p-3 text-center">{item.id}</td>
                   <td className="p-3">{item.nomor_invoice}</td>
